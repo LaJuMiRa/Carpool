@@ -28,6 +28,9 @@ targets:
         excludes: ["**/.gitkeep"]
     dependencies:
       - package: CarpoolKit
+        product: CarpoolKit
+      - package: CarpoolKit
+        product: CarpoolUI
       - target: CarpoolWidgets
     entitlements:
       path: Carpool/Carpool.entitlements
@@ -54,6 +57,9 @@ targets:
     sources: [CarpoolWidgets]
     dependencies:
       - package: CarpoolKit
+        product: CarpoolKit
+      - package: CarpoolKit
+        product: CarpoolUI
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
     entitlements:
@@ -80,3 +86,4 @@ schemes:
     test:
       targets:
         - package: CarpoolKit/CarpoolKitTests
+        - package: CarpoolKit/CarpoolUITests

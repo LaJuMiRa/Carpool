@@ -38,9 +38,10 @@ Carpool/                 App-Target
     Booking/             Reservieren, Konflikt, Übernehmen
     Members/             Mitglieder, Einladung
     Settings/            Einstellungen, Auto hinzufügen
-  DesignSystem/          Farben, Typo, Abstände, Bausteine (CarCard, BookingBlock, StatusLabel, Avatar, FuelPicker)
-  Data/                  Supabase-Client, Repositories, Modelle
-CarpoolKit/              Swift Package: Modelle + Logik, geteilt mit Extensions
+  Data/                  Supabase-Client, Repositories
+CarpoolKit/              Swift Package, geteilt mit Extensions
+  Sources/CarpoolKit/    Modelle + Logik (CarStatus, FuelLevel, Backend)
+  Sources/CarpoolUI/     Design System: Color Sets, Tokens, Bausteine, Vorschau-Seite
 CarpoolWidgets/          Widget-Extension inkl. Live Activity
 supabase/
   migrations/            SQL, versioniert
@@ -232,6 +233,11 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - Bundle-ID `at.rauscher.carpool` (Widgets `.widgets`), App Group `group.at.rauscher.carpool`. Team für Geräte-Builds noch nicht gesetzt.
 - **Backend direkt in der Supabase-Cloud** (Projekt „Carpool", Ref `ybceqcsvlhbbzjlczvaq`, eu-west-1), bearbeitet über den Supabase-Connector; kein lokaler Docker-Stack. Migrationen trotzdem als SQL-Dateien in `supabase/migrations/` ablegen.
 - Supabase-URL/Key (Publishable Key) über `Config/Secrets.xcconfig` (nicht eingecheckt, Vorlage `Secrets.example.xcconfig`) → Info.plist → `SupabaseConfig`.
+- **Design System liegt im Package als `CarpoolUI`** (nicht in `Carpool/DesignSystem/`), damit Widgets und Live-Aktivität dieselben Farben und Bausteine nutzen. Color Sets in `CarpoolKit/Sources/CarpoolUI/Resources/Colors.xcassets`, Namen 1:1 wie in der Token-Tabelle.
+- Bausteine: `PrimaryButtonStyle`/`SecondaryButtonStyle`/`CompactButtonStyle`/`DestructiveButtonStyle`, `Avatar`, `StatusLabel`, `CarDot`, `CarTitle`/`CarDetailTitle` (`CarNaming`), `CarSilhouette`, `CarRow`, `CarTile`, `CarSelectRow`, `BookingBlock`, `InfoBanner`, `Chip`, `FuelPicker`, `FuelGauge`, `cardStyle()`, `SectionHeader`, `PropertyRow`, `Hairline`. Tokens: `Spacing`, `Radius`, `ControlSize`, `Motion`, Schriftstile (`screenTitleStyle()` …).
+- Kalenderfarben: drei Farbsätze; ab dem 4. Auto wiederholen sie sich (`CarColor(slot:)`).
+- Fahrzeugbild vorerst `CarSilhouette`: Form (Limousine/Kompakt/Kombi) wird aus dem Modellnamen geschätzt, Farbe aus dem Lack-Freitext (`PaintColor`). Dunkle Lacke bekommen eine feine Kontur.
+- Vorschau-Seite: App mit Startargument `-designCatalog` starten (nur Debug), optional `-designCatalogSection "Autos"` springt zu einem Abschnitt.
 - DerivedData nicht im Projektordner ablegen (iCloud-Ordner hängt Metadaten an → Codesign-Fehler „detritus not allowed").
 
 ## Offene Punkte
