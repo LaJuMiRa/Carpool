@@ -1,0 +1,16 @@
+.DS_Store
+# Xcode
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+.swiftpm/
+CarpoolKit/.build/
+# Secrets
+Config/Secrets.xcconfig
+# Node / Supabase
+node_modules/
+supabase/.branches/
+supabase/.temp/
+supabase/.env

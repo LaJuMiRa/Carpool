@@ -1,0 +1,82 @@
+name: Carpool
+options:
+  bundleIdPrefix: at.rauscher
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: de
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: "1"
+    DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  CarpoolKit:
+    path: CarpoolKit
+targets:
+  Carpool:
+    type: application
+    platform: iOS
+    sources:
+      - path: Carpool
+        excludes: ["**/.gitkeep"]
+    dependencies:
+      - package: CarpoolKit
+      - target: CarpoolWidgets
+    entitlements:
+      path: Carpool/Carpool.entitlements
+      properties:
+        com.apple.security.application-groups: [group.at.rauscher.carpool]
+    info:
+      path: Carpool/Info.plist
+      properties:
+        CFBundleDisplayName: Carpool
+        CFBundleDevelopmentRegion: de_AT
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSSupportsLiveActivities: true
+        SupabaseURL: $(SUPABASE_URL)
+        SupabaseAnonKey: $(SUPABASE_ANON_KEY)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: at.rauscher.carpool
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  CarpoolWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [CarpoolWidgets]
+    dependencies:
+      - package: CarpoolKit
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    entitlements:
+      path: CarpoolWidgets/CarpoolWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.at.rauscher.carpool]
+    info:
+      path: CarpoolWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Carpool
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        SupabaseURL: $(SUPABASE_URL)
+        SupabaseAnonKey: $(SUPABASE_ANON_KEY)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: at.rauscher.carpool.widgets
+schemes:
+  Carpool:
+    build:
+      targets:
+        Carpool: all
+        CarpoolWidgets: all
+    test:
+      targets:
+        - package: CarpoolKit/CarpoolKitTests
