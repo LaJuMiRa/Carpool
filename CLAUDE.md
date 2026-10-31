@@ -103,7 +103,8 @@ bookings      (id uuid pk, family_id fk, car_id fk, member_id fk,
                kind text check (kind in ('reservation','trip')),
                series_id uuid null,                                      -- wiederkehrende Serie
                status text check (status in ('active','completed','cancelled','displaced')),
-               displaced_by fk members null, fuel_quarters_on_return int null, created_at)
+               displaced_by fk members null, fuel_quarters_on_return int null, created_at,
+               planned_ends_at timestamptz null, fuel_quarters_on_take int null) -- ergänzt in Phase 2
 booking_series(id uuid pk, car_id fk, member_id fk, rrule text, start_time time, end_time time, until date null)
 damages       (id uuid pk, car_id fk, reported_by fk members, description text,
                photo_path text null, drivable bool, created_at, resolved_at null)
@@ -118,6 +119,42 @@ settings      (member_id pk, notify_* bool …, calendar_car_animation text chec
 - Schreibende Logik als **RPC/Edge Functions**, nicht direkt aus der App: `take_car`, `return_car(fuel)`, `reserve(car, start, end, rrule?)`, `free_cars(start, end)`, `displace(booking_id)` (prüft Hauptnutzer + nicht laufend, setzt Status, schickt Push, schlägt Ersatz vor), `undo_last_action`.
 - **Realtime** auf `bookings`, `cars`, `damages` für Live-Status in Übersicht, Kalender und Mitglieder.
 - Storage-Bucket `damage-photos`, privat, RLS nach Familie.
+
+## Backend-API (Stand Phase 2)
+
+Migrationen in `supabase/migrations/`, Tests in `supabase/tests/booking_rules.test.sql` (pgTAP, läuft in einer Transaktion mit Rollback; per Supabase-Connector ausführen), Beispiel-Familie in `supabase/seed.sql`.
+
+**Lesen** direkt aus den Tabellen (RLS: nur eigene Familie). **Schreiben** über RPCs; direkt erlaubt sind nur: Autos anlegen/ändern (Admin), Familienname (Admin), eigener Vorname, Schaden melden/erledigen, eigene Einstellungen.
+
+| RPC | Zweck | Antwort |
+| --- | --- | --- |
+| `create_family(p_family_name, p_first_name)` | neue Familie, Aufrufer wird Admin | `{family_id, member_id, invite_code}` |
+| `join_family(p_invite_code, p_first_name)` | beitreten; gleichnamiges, noch nicht beigetretenes Mitglied wird übernommen | `{family_id, member_id, role}` |
+| `regenerate_invite_code()` | neuer Code (Admin) | Code |
+| `take_car(p_car_id)` | Nehmen; eigene Reservierung (läuft oder beginnt in ≤ 15 min) wird zur Fahrt | `{ok, booking_id, from_reservation}` |
+| `return_car(p_fuel_quarters, p_car_id?)` | Zurückgeben, Tank 1–4 | `{ok, booking_id}` |
+| `undo_last_action()` | Nehmen/Zurückgeben rückgängig, 15 s Fenster | `{ok, kind, booking_id}` |
+| `reserve(p_car_id, p_starts_at, p_ends_at, p_rrule?, p_until?, p_displace?, p_accept_no_replacement?)` | Reservieren, optional wöchentlich und mit Verdrängen | `{ok:true, booking_ids, series_id, displaced_count}` oder `{ok:false, reason, conflicts[], free_car_ids[]}` |
+| `check_reservation(…)` | wie `reserve`, bucht nicht (Hinweis im Formular) | wie oben |
+| `free_cars(p_starts_at, p_ends_at)` | freie Autos im Zeitraum | Liste `cars` |
+| `displace(p_booking_id, p_accept_no_replacement?)` | einzelne Reservierung übernehmen (Hauptnutzer) | `{ok, replacement_found}` oder `{ok:false, reason:'no_replacement'}` |
+| `cancel_booking(p_booking_id, p_whole_series?)` | eigene Reservierung stornieren | `{ok, cancelled_count}` |
+| `register_device(p_platform, p_token)` / `unregister_device(p_token)` | Push-Token | – |
+
+`conflicts[]`: `{booking_id, kind, starts_at, ends_at, member_id, first_name, can_displace}`. `reason`: `conflict` (normal), `not_displaceable` (Verdrängen nicht erlaubt), `no_replacement` (Warnung vor dem Bestätigen).
+
+**Fehlercodes** (Exception-Text, Code `P0001`) → Nutzertext in der App:
+`not_authenticated`, `not_a_member`, `already_member`, `invalid_invite_code`, `name_taken`, `admin_required`, `last_admin`, `member_not_in_family`, `car_not_found`, `car_busy`, `car_reserved`, `already_driving`, `no_running_trip`, `invalid_fuel`, `invalid_range`, `starts_in_past`, `range_too_long`, `invalid_rrule`, `invalid_until`, `series_must_end_same_day`, `no_occurrences`, `conflict_retry`, `booking_not_found`, `not_owner`, `not_cancellable`, `not_displaceable`, `nothing_to_undo`, `undo_expired`.
+
+**Festgelegte Regeln** (über die Anleitung oben hinaus):
+- Eine laufende Fahrt ohne geplantes Ende blockiert das Auto nur bis „jetzt“; Reservierungen danach sind erlaubt (die Person wird benachrichtigt). Mit geplantem Ende (aus Reservierung) blockiert sie bis dahin.
+- Pro Person höchstens eine laufende Fahrt, pro Auto höchstens eine.
+- Nehmen ist gesperrt, wenn gerade die Reservierung von jemand anderem läuft.
+- Reservierung max. 14 Tage, Beginn nicht in der Vergangenheit (5 min Toleranz).
+- Serien: nur wöchentlich (`FREQ=WEEKLY;BYDAY=MO,TU,…`), Ende am selben Tag, Zeiten in der Zeitzone der Familie (`families.time_zone`, Standard Europe/Vienna). Termine werden 8 Wochen im Voraus angelegt; Cron täglich 02:15 UTC ergänzt. Belegte Termine werden übersprungen, Inhaber bekommt `series_occurrence_skipped`.
+- Ersatzauto beim Verdrängen: erstes freies Auto nach Kalenderfarbe.
+- Benachrichtigungen landen in `notifications` (Outbox, `send_after`); „Auto wieder frei“ wird 15 s verzögert, damit Rückgängig sie zurückziehen kann. Versand per Edge Function folgt in Phase 7.
+- Schadenfotos im Bucket `damage-photos` unter `<family_id>/<datei>`.
 
 ## Design System
 
@@ -201,3 +238,5 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - **Anbieter für Fahrzeugbilder** (freigestellt, nach Marke/Modell/Farbe): Kosten, Lizenz und Abdeckung prüfen; bis dahin neutrale Silhouette je Karosserieform.
 - **App-Store-Name:** „Carpool" ist vermutlich vergeben; Anzeigename auf dem iPhone bleibt „Carpool", Store-Eintrag ggf. „Carpool – Familienautos". Für TestFlight egal.
 - App-Icon: Schlüsselbrett-Motiv aus dem Splash.
+- Rate-Limit für `join_family` (Code-Raten) vor TestFlight prüfen.
+- Beispiel-Familie Berger liegt in der Cloud-Datenbank; vor dem echten Einsatz löschen (`delete from families where invite_code = 'K7P-2QX'`).
