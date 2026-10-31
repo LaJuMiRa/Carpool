@@ -77,6 +77,17 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: at.rauscher.carpool.widgets
+  CarpoolAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [CarpoolAppUITests]
+    dependencies:
+      - target: Carpool
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: at.rauscher.carpool.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Carpool
 schemes:
   Carpool:
     build:
@@ -87,3 +98,4 @@ schemes:
       targets:
         - package: CarpoolKit/CarpoolKitTests
         - package: CarpoolKit/CarpoolUITests
+        - CarpoolAppUITests

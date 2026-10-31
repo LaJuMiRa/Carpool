@@ -2,27 +2,35 @@ import CarpoolKit
 import SwiftUI
 
 /// Zeile in „Andere Autos": Bild, Name, Status, eine Zeile Kontext, optional Aktion.
+/// Mit `silhouetteID` und `namespace` wird das Bild zum gemeinsamen Element (Nehmen, Detail).
 public struct CarRow<Action: View>: View {
     private let naming: CarNaming
     private let paint: String
     private let status: CarStatus
+    private let statusText: String?
     private let detail: String?
     private let hasOpenDamage: Bool
+    private let silhouetteID: AnyHashable?
+    private let namespace: Namespace.ID?
     private let action: Action
 
-    public init(naming: CarNaming, paint: String, status: CarStatus, detail: String? = nil,
-                hasOpenDamage: Bool = false, @ViewBuilder action: () -> Action) {
+    public init(naming: CarNaming, paint: String, status: CarStatus, statusText: String? = nil,
+                detail: String? = nil, hasOpenDamage: Bool = false, silhouetteID: AnyHashable? = nil,
+                namespace: Namespace.ID? = nil, @ViewBuilder action: () -> Action) {
         self.naming = naming
         self.paint = paint
         self.status = status
+        self.statusText = statusText
         self.detail = detail
         self.hasOpenDamage = hasOpenDamage
+        self.silhouetteID = silhouetteID
+        self.namespace = namespace
         self.action = action()
     }
 
     public var body: some View {
         HStack(spacing: Spacing.m) {
-            CarSilhouette(model: naming.model, paint: paint)
+            silhouette
                 .frame(width: 84)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -34,7 +42,7 @@ public struct CarRow<Action: View>: View {
                             .accessibilityLabel("offener Schaden")
                     }
                 }
-                StatusLabel(status)
+                StatusLabel(status, text: statusText)
                 if let detail {
                     Text(detail).font(.subheadline).foregroundStyle(Color.inkSecondary)
                 }
@@ -47,16 +55,26 @@ public struct CarRow<Action: View>: View {
         .padding(.vertical, Spacing.s)
     }
 
+    @ViewBuilder
+    private var silhouette: some View {
+        let image = CarSilhouette(model: naming.model, paint: paint)
+        if let silhouetteID, let namespace {
+            image.matchedGeometryEffect(id: silhouetteID, in: namespace)
+        } else {
+            image
+        }
+    }
+
     private var accessibilityText: String {
-        [naming.spokenName, status.label, hasOpenDamage ? "offener Schaden" : nil, detail]
+        [naming.spokenName, statusText ?? status.label, hasOpenDamage ? "offener Schaden" : nil, detail]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }
 
 public extension CarRow where Action == EmptyView {
-    init(naming: CarNaming, paint: String, status: CarStatus, detail: String? = nil,
+    init(naming: CarNaming, paint: String, status: CarStatus, statusText: String? = nil, detail: String? = nil,
          hasOpenDamage: Bool = false) {
-        self.init(naming: naming, paint: paint, status: status, detail: detail,
+        self.init(naming: naming, paint: paint, status: status, statusText: statusText, detail: detail,
                   hasOpenDamage: hasOpenDamage) { EmptyView() }
     }
 }

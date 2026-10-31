@@ -7,3 +7,11 @@ extension SupabaseConfig {
         try load(from: Bundle.main.infoDictionary ?? [:])
     }
 }
+
+extension AppSession {
+    /// Session mit echtem Backend, oder nil, wenn die Konfiguration fehlt.
+    static func live() -> AppSession? {
+        guard let config = try? SupabaseConfig.fromMainBundle() else { return nil }
+        return AppSession(api: SupabaseCarpoolAPI(config: config))
+    }
+}

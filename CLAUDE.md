@@ -11,7 +11,7 @@ Referenzen (privat, nur für Laurenz sichtbar; bei Bedarf Screenshots ins Repo l
 - **iOS 26**, Xcode 26, Swift 6, **SwiftUI** mit Observation (`@Observable`). Kein UIKit außer wo nötig.
 - **Liquid Glass** über Systemkomponenten (`TabView`, `.sheet`, Toolbar) und `.buttonStyle(.glass)` / `.glassProminent`.
 - **Supabase** (Postgres, Auth, Realtime, Storage, Edge Functions) mit `supabase-swift`.
-- Login: **Sign in with Apple** über Supabase Auth.
+- Login: **E-Mail + Passwort** über Supabase Auth (Sign in with Apple später, sobald ein Apple-Developer-Konto da ist).
 - Erweiterungen: **WidgetKit** (Widgets), **ActivityKit** (Live-Aktivität + Dynamic Island), **App Intents** (Kurzbefehl „Auto zurückgeben", Siri).
 - Push über APNs, ausgelöst aus Supabase Edge Functions.
 - Verteilung zunächst über **TestFlight** an die Familie.
@@ -157,6 +157,24 @@ Migrationen in `supabase/migrations/`, Tests in `supabase/tests/booking_rules.te
 - Benachrichtigungen landen in `notifications` (Outbox, `send_after`); „Auto wieder frei“ wird 15 s verzögert, damit Rückgängig sie zurückziehen kann. Versand per Edge Function folgt in Phase 7.
 - Schadenfotos im Bucket `damage-photos` unter `<family_id>/<datei>`.
 
+## Übersicht und Texte (Stand Phase 4)
+
+Berechnet in `CarpoolKit/Sources/CarpoolKit/Overview/OverviewState.swift` (reine Anzeige-Logik, für Android übernehmen):
+- Titel `„{frei} von {alle} frei"`; gezählt werden Autos mit Status frei (ohne das eigene).
+- Status je Auto: **unterwegs** bei laufender Fahrt; **reserviert**, wenn eine Reservierung läuft oder in ≤ 60 min beginnt; sonst **frei**. Eigene Reservierung: Statuswort „für dich", Nehmen erlaubt.
+- Detailzeile: „Mama, zurück um 17:30" (geplantes Ende) bzw. „Mama, seit 09:12"; „Felix ab 14:00" / „Felix bis 19:00"; „Deine Reservierung ab 14:00"; frei mit Reservierung heute: „Frei bis 14:00, dann Felix" („dann du").
+- Eigene Fahrt (Karte oben): „Du fährst seit 09:12", „Tank beim Nehmen ¾", Hinweis „Jonas braucht ihn ab 18:00" (anderer Tag: „ab morgen 08:00", „ab Mo 08:00"), Button „Zurückgeben". Darunter „Andere Autos".
+- „Nehmen" nur, wenn man selbst nicht fährt und das Auto frei oder für einen selbst reserviert ist.
+- Rückgabe-Sheet: „{Auto} zurückgeben", „Seit 09:12 unterwegs", Tank-Regler (vorausgewählt: zuletzt gemeldeter Stand), „{Name} bekommt eine Nachricht, dass {Auto} bereit ist."
+- Rückgängig-Hinweis 5 s: „{Auto} gehört dir" / „{Auto} zurückgegeben", Button „Rückgängig".
+- Fehlertexte je Fehlercode: `CarpoolKit/Sources/CarpoolKit/API/CarpoolError.swift` (z. B. `car_busy` → „Das Auto ist gerade unterwegs.").
+
+## Entwicklung und Tests
+- Testkonten (nur Entwicklung, Passwort beim Projektinhaber): `papa@test.local` (Papa, Admin), `lisa@test.local` (Lisa), `neu@test.local` (ohne Familie). Vor dem echten Einsatz löschen.
+- Automatische Anmeldung im Debug-Build: Umgebungsvariablen `DEV_EMAIL`/`DEV_PASSWORD`, im Simulator per `SIMCTL_CHILD_DEV_EMAIL=… SIMCTL_CHILD_DEV_PASSWORD=… xcrun simctl launch …`.
+- UI-Test Kernablauf gegen das echte Backend (`CarpoolAppUITests`): `TEST_RUNNER_DEV_EMAIL=lisa@test.local TEST_RUNNER_DEV_PASSWORD=… xcodebuild test …`; ohne die Variablen wird er übersprungen.
+- Supabase Auth: „Confirm email" für die Testphase ausschalten (Dashboard → Authentication → Sign In / Providers → Email), sonst braucht jede Registrierung einen Bestätigungslink.
+
 ## Design System
 
 Grundsätze: ruhig statt laut, viel Weißraum, **Linien statt Schatten** für Inhalte, Farbe nur für Autos und Status, Farbe nie ohne Wort/Namen. Titel nur, wenn sie etwas aussagen („1 von 3 frei", Familienname) – nie „Kalender" o. Ä. und kein Datum oben.
@@ -217,7 +235,7 @@ Du-Form, kurz, keine Ausrufezeichen. Buttons mit Verb: „Nehmen", „Zurückgeb
 1. **Setup:** Xcode-Projekt mit Targets (App, Widgets), Swift Package `CarpoolKit`, Supabase-Projekt, `supabase/` mit lokaler Entwicklung (Supabase CLI).
 2. **Backend:** Migrationen (Schema, Constraint, RLS), RPCs/Edge Functions, Seed-Daten für die Beispiel-Familie (Papa, Mama, Lisa, Jonas, Felix; Golf „Radieschen", Škoda Octavia, Toyota Yaris „Flitzer"). Tests für Konfliktregeln und Verdrängen.
 3. **Design System in SwiftUI:** Color Sets, Abstände, Bausteine; eine Vorschau-Seite mit allen Bausteinen.
-4. **Kernablauf:** Login + Familie beitreten → Übersicht → Nehmen → Rückgabe → Rückgängig. Realtime.
+4. **Kernablauf:** Login (E-Mail + Passwort) + Familie beitreten → Übersicht → Nehmen → Rückgabe → Rückgängig. Realtime.
 5. **Kalender + Reservieren** inkl. Wiederholung, Konflikt im Formular, Übernehmen.
 6. **Mitglieder, Einstellungen, Auto hinzufügen, Schäden.**
 7. **Push**, dann **Widgets, Live-Aktivität, App Intents.**
