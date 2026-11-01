@@ -29,7 +29,7 @@ public final class FamilyStore {
     public private(set) var undoOffer: UndoOffer?
 
     public let member: Member
-    private let api: any CarpoolAPI
+    public let api: any CarpoolAPI
     private var changesTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
 
@@ -99,6 +99,37 @@ public final class FamilyStore {
             actionError = CarpoolError.from(error)
         }
         await refresh()
+    }
+
+    /// Eigene Reservierung löschen, auf Wunsch mit allen folgenden Terminen der Serie.
+    public func cancel(_ booking: Booking, wholeSeries: Bool) async {
+        if let before = snapshot {
+            let removed = before.bookings.filter {
+                $0.id == booking.id || (wholeSeries && booking.seriesId != nil && $0.seriesId == booking.seriesId
+                    && $0.startsAt >= booking.startsAt)
+            }
+            snapshot = before.removing(Set(removed.map(\.id)))
+        }
+        do {
+            try await api.cancelBooking(booking.id, wholeSeries: wholeSeries)
+        } catch {
+            actionError = CarpoolError.from(error)
+        }
+        await refresh()
+    }
+
+    /// Fremde Reservierung als Hauptnutzer übernehmen. Liefert `.noReplacement`, wenn erst
+    /// bestätigt werden muss, dass es kein Ersatzauto gibt; nil bei Fehler (`actionError`).
+    public func displace(_ booking: Booking, acceptNoReplacement: Bool) async -> DisplaceResult? {
+        do {
+            let result = try await api.displace(bookingID: booking.id, acceptNoReplacement: acceptNoReplacement)
+            await refresh()
+            return result
+        } catch {
+            actionError = CarpoolError.from(error)
+            await refresh()
+            return nil
+        }
     }
 
     public func dismissUndo(_ offer: UndoOffer) {

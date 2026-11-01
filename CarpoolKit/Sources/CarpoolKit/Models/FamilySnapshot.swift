@@ -43,6 +43,12 @@ public struct FamilySnapshot: Sendable, Hashable {
         return FamilySnapshot(family: family, me: me, members: members, cars: cars, bookings: others + [trip])
     }
 
+    /// Lokale Vorschau von „Löschen".
+    public func removing(_ bookingIDs: Set<UUID>) -> FamilySnapshot {
+        FamilySnapshot(family: family, me: me, members: members, cars: cars,
+                       bookings: bookings.filter { !bookingIDs.contains($0.id) })
+    }
+
     /// Lokale Vorschau von „Zurückgeben".
     public func applyingReturn(carID: UUID, fuel: FuelLevel) -> FamilySnapshot {
         let remaining = bookings.filter { !($0.isRunningTrip && $0.carId == carID && $0.memberId == me.id) }

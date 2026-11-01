@@ -12,6 +12,9 @@ struct CarpoolApp: App {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-designCatalog") {
                     DesignCatalogView(initialSection: UserDefaults.standard.string(forKey: "designCatalogSection"))
+                } else if ProcessInfo.processInfo.arguments.contains("-previewFamily") {
+                    // Beispiel-Familie ohne Netzwerk, angemeldet als Lisa.
+                    MainTabView(session: AppSession(api: PreviewAPI()), member: PreviewAPI.lisa)
                 } else {
                     content
                 }

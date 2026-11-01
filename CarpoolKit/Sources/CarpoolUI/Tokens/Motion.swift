@@ -14,6 +14,12 @@ public enum Motion {
     /// Überblenden von Status und Zahlen.
     public static let crossfade = Animation.easeOut(duration: 0.2)
     public static let numberFade = Animation.easeOut(duration: 0.15)
+    /// Auto-Icon einer laufenden Fahrt fährt im Kalender einmal ein.
+    public static let driveIn = Animation.easeOut(duration: 0.5)
+    /// Neue Buchung von anderen: 8 pt einschweben und einblenden.
+    public static let appear = Animation.easeOut(duration: 0.25)
+    /// Konflikt-Hinweis klappt auf.
+    public static let expand = Animation.easeOut(duration: 0.2)
 
     /// Bei „Bewegung reduzieren" wird jede Bewegung zu kurzem Überblenden.
     public static func resolved(_ animation: Animation, reduceMotion: Bool) -> Animation {

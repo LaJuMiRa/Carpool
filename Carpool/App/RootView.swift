@@ -19,7 +19,7 @@ struct MainTabView: View {
                 OverviewScreen(store: store)
             }
             Tab("Kalender", systemImage: "calendar") {
-                PlaceholderScreen(text: "Kalender folgt in Phase 5")
+                CalendarScreen(store: store)
             }
             Tab("Mitglieder", systemImage: "person.2") {
                 MembersScreen(session: session, store: store)
@@ -30,17 +30,5 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await store.refresh() } }
         }
-    }
-}
-
-private struct PlaceholderScreen: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.callout)
-            .foregroundStyle(Color.inkMuted)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.paper)
     }
 }

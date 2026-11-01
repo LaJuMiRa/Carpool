@@ -143,6 +143,90 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
         try await call { try await client.rpc("undo_last_action").execute() }
     }
 
+    // MARK: Reservieren
+
+    /// Parameter von `reserve`/`check_reservation`; nil-Werte fehlen im JSON, dann gelten die Standardwerte.
+    private struct ReserveParams: Encodable {
+        let p_car_id: UUID
+        let p_starts_at: String
+        let p_ends_at: String
+        let p_rrule: String?
+        let p_until: String?
+        let p_displace: Bool?
+        let p_accept_no_replacement: Bool?
+
+        init(_ request: ReservationRequest, displace: Bool? = nil, acceptNoReplacement: Bool? = nil) {
+            p_car_id = request.carID
+            p_starts_at = Self.timestamp(request.startsAt)
+            p_ends_at = Self.timestamp(request.endsAt)
+            p_rrule = request.rrule
+            p_until = request.until
+            p_displace = displace
+            p_accept_no_replacement = acceptNoReplacement
+        }
+
+        static func timestamp(_ date: Date) -> String {
+            date.formatted(.iso8601)
+        }
+    }
+
+    public func checkReservation(_ request: ReservationRequest) async throws -> ReservationResult {
+        try await call {
+            try await client.rpc("check_reservation", params: ReserveParams(request)).execute().value
+        }
+    }
+
+    public func reserve(_ request: ReservationRequest, displace: Bool, acceptNoReplacement: Bool) async throws
+        -> ReservationResult {
+        try await call {
+            try await client.rpc("reserve", params: ReserveParams(request, displace: displace,
+                                                                  acceptNoReplacement: acceptNoReplacement))
+                .execute().value
+        }
+    }
+
+    public func freeCars(from start: Date, to end: Date) async throws -> [Car] {
+        try await call {
+            try await client.rpc("free_cars", params: ["p_starts_at": ReserveParams.timestamp(start),
+                                                       "p_ends_at": ReserveParams.timestamp(end)])
+                .execute().value
+        }
+    }
+
+    public func displace(bookingID: UUID, acceptNoReplacement: Bool) async throws -> DisplaceResult {
+        struct Params: Encodable {
+            let p_booking_id: UUID
+            let p_accept_no_replacement: Bool
+        }
+        struct Response: Decodable {
+            let ok: Bool
+            let replacement_found: Bool?
+        }
+        let response: Response = try await call {
+            try await client.rpc("displace", params: Params(p_booking_id: bookingID,
+                                                            p_accept_no_replacement: acceptNoReplacement))
+                .execute().value
+        }
+        return response.ok ? .displaced(replacementFound: response.replacement_found ?? false) : .noReplacement
+    }
+
+    @discardableResult
+    public func cancelBooking(_ bookingID: UUID, wholeSeries: Bool) async throws -> Int {
+        struct Params: Encodable {
+            let p_booking_id: UUID
+            let p_whole_series: Bool
+        }
+        struct Response: Decodable {
+            let cancelled_count: Int
+        }
+        let response: Response = try await call {
+            try await client.rpc("cancel_booking", params: Params(p_booking_id: bookingID,
+                                                                  p_whole_series: wholeSeries))
+                .execute().value
+        }
+        return response.cancelled_count
+    }
+
     // MARK: Fehler
 
     /// Übersetzt jeden Fehler in einen `CarpoolError`.

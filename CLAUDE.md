@@ -169,10 +169,23 @@ Berechnet in `CarpoolKit/Sources/CarpoolKit/Overview/OverviewState.swift` (reine
 - Rückgängig-Hinweis 5 s: „{Auto} gehört dir" / „{Auto} zurückgegeben", Button „Rückgängig".
 - Fehlertexte je Fehlercode: `CarpoolKit/Sources/CarpoolKit/API/CarpoolError.swift` (z. B. `car_busy` → „Das Auto ist gerade unterwegs.").
 
+## Kalender und Reservieren (Stand Phase 5)
+
+Berechnet in `CarpoolKit/Sources/CarpoolKit/Calendar/CalendarState.swift` und `…/Booking/` (`ReservationDraft`, `ReservationTexts`, `ReservationModel`); Zeiten in der Zeitzone der Familie.
+- **Kalender:** Titel = Monat des gewählten Tags („Oktober", anderes Jahr „Jänner 2027"), Buttons „Heute" und „+" (Reservieren für den gewählten Tag). Woche Mo–So, je Tag Punkte in den Farben der gebuchten Autos. Wischen blättert eine Woche. Tagestitel „Heute" / „Morgen" / „Gestern" / „Samstag, 31. Oktober"; leer: „Nichts reserviert."
+- Buchung erscheint an jedem Tag, den sie berührt. Zeittext: „08:00–17:30", laufende Fahrt ohne Plan „seit 09:12", über Mitternacht „ab 18:00" / „bis 10:00" / „ganztägig". Laufende Fahrt mit Auto-Icon, Serie mit Wiederholen-Icon.
+- **Kontextmenü:** eigene Reservierung → „Löschen" (Serie: „Nur diesen Termin löschen" / „Diesen und alle folgenden löschen"); fremde zukünftige Reservierung auf einem Auto, dessen Hauptnutzer ich bin → „Übernehmen".
+- **Formular:** Schnellwahl „Jetzt" (auf 5 min aufgerundet, 2 h), „Heute Abend" (18:00–22:00, nur vor 18:00), „Morgen" (08:00–17:00), „…" (eigener Zeitraum). Startwert: heute „Jetzt", morgen „Morgen", sonst der Tag 08:00–17:00. Vorausgewähltes Auto: eines, dessen Hauptnutzer ich bin, sonst das erste nach Kalenderfarbe.
+- Zeile „Sa, 31. Okt · 10:00 – 16:00"; „Wiederholen": „Nie", „Jeden Sa", „Mo–Do", „Mo, Mi, Fr", „Jeden Tag", mit Ende „Mo–Do bis 30. Nov"; nur wenn die Reservierung am selben Tag endet (sonst „nur am selben Tag").
+- Jede Änderung wird geprüft (`check_reservation` + `free_cars`, 250 ms entprellt). Kacheln: „frei" / „belegt".
+- **Konflikt-Hinweis:** „Felix hat Octavia von 10:00 bis 16:00." (anderer Tag: „… morgen von …", „… am Samstag von …"), „Mama fährt Octavia bis 17:30.", „Mama ist gerade mit Octavia unterwegs.", „Du hast Octavia schon von …", mehrere Termine „Felix hat Octavia an 3 Terminen." / „Octavia ist an 3 Terminen belegt.". Darunter alle freien Autos zum Tauschen, als Hauptnutzer „Übernehmen"; ohne beides „Kein anderes Auto ist frei.". Primär-Button dann gesperrt: „Octavia ist belegt".
+- **Übernehmen (F14):** „Felix’ Buchung übernehmen?" (Genitiv: Name auf s/ß/x/z → ’, sonst „Lisas"), „Felix verliert die Reservierung morgen, 10:00–16:00, und bekommt eine Nachricht.", Button „Octavia übernehmen" (danger), „Abbrechen". Ohne Ersatzauto danach: „Kein Ersatzauto frei" / „Für Felix ist in dieser Zeit kein anderes Auto frei. Willst du trotzdem übernehmen?" / „Trotzdem übernehmen".
+
 ## Entwicklung und Tests
 - Testkonten (nur Entwicklung, Passwort beim Projektinhaber): `papa@test.local` (Papa, Admin), `lisa@test.local` (Lisa), `neu@test.local` (ohne Familie). Vor dem echten Einsatz löschen.
 - Automatische Anmeldung im Debug-Build: Umgebungsvariablen `DEV_EMAIL`/`DEV_PASSWORD`, im Simulator per `SIMCTL_CHILD_DEV_EMAIL=… SIMCTL_CHILD_DEV_PASSWORD=… xcrun simctl launch …`.
 - UI-Test Kernablauf gegen das echte Backend (`CarpoolAppUITests`): `TEST_RUNNER_DEV_EMAIL=lisa@test.local TEST_RUNNER_DEV_PASSWORD=… xcodebuild test …`; ohne die Variablen wird er übersprungen.
+- **Beispiel-Familie ohne Netzwerk** (nur Debug): Startargument `-previewFamily` öffnet die App als Lisa mit `PreviewAPI` (Lisa ist Hauptnutzerin von Flitzer; Konflikte grob nachgestellt). Darauf läuft `CalendarFlowUITests` (Konflikt → Tauschen → Übernehmen) ohne Testkonto.
 - Supabase Auth: „Confirm email" für die Testphase ausschalten (Dashboard → Authentication → Sign In / Providers → Email), sonst braucht jede Registrierung einen Bestätigungslink.
 
 ## Design System
@@ -256,9 +269,14 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - Kalenderfarben: drei Farbsätze; ab dem 4. Auto wiederholen sie sich (`CarColor(slot:)`).
 - Fahrzeugbild vorerst `CarSilhouette`: Form (Limousine/Kompakt/Kombi) wird aus dem Modellnamen geschätzt, Farbe aus dem Lack-Freitext (`PaintColor`). Dunkle Lacke bekommen eine feine Kontur.
 - Vorschau-Seite: App mit Startargument `-designCatalog` starten (nur Debug), optional `-designCatalogSection "Autos"` springt zu einem Abschnitt.
+- Kalender-Titel zeigt den Monat (wie Mockup F10), obwohl die Grundsätze „kein Datum oben" sagen – ohne Monat ist die Woche nicht einzuordnen.
+- Übernehmen-Text sagt „die Reservierung" statt „seine Reservierung" (Mockup F14), damit er für alle Namen passt.
+- Auto-Icon im Kalender fährt nur beim ersten Erscheinen je Fahrt ein; Einstellung einmal/dauerhaft/aus folgt mit den Einstellungen (Phase 6).
 - DerivedData nicht im Projektordner ablegen (iCloud-Ordner hängt Metadaten an → Codesign-Fehler „detritus not allowed").
 
 ## Offene Punkte
+- Kontextmenü F11 zeigt im Mockup auch „Bearbeiten", „Verlängern", „An jemand übergeben" – dafür fehlen RPCs (`update_booking`, `extend_booking`, `transfer_booking`); bisher nur Löschen und Übernehmen.
+- Kalender zeigt nur aktive Buchungen; abgeschlossene Fahrten vergangener Tage fehlen (bräuchte eigene Abfrage).
 - **Anbieter für Fahrzeugbilder** (freigestellt, nach Marke/Modell/Farbe): Kosten, Lizenz und Abdeckung prüfen; bis dahin neutrale Silhouette je Karosserieform.
 - **App-Store-Name:** „Carpool" ist vermutlich vergeben; Anzeigename auf dem iPhone bleibt „Carpool", Store-Eintrag ggf. „Carpool – Familienautos". Für TestFlight egal.
 - App-Icon: Schlüsselbrett-Motiv aus dem Splash.

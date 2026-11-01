@@ -84,6 +84,26 @@ public struct DestructiveButtonStyle: ButtonStyle {
     }
 }
 
+/// Bestätigung einer zerstörerischen Aktion im Sheet (F14 „Octavia übernehmen"): Fläche danger.
+public struct DestructiveProminentButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(Color.paper)
+            .frame(maxWidth: .infinity, minHeight: ControlSize.buttonHeight)
+            .padding(.horizontal, Spacing.m)
+            .background(Color.danger, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .modifier(PressEffect(isPressed: configuration.isPressed))
+    }
+}
+
+public extension ButtonStyle where Self == DestructiveProminentButtonStyle {
+    static var carpoolDestructiveProminent: DestructiveProminentButtonStyle { DestructiveProminentButtonStyle() }
+}
+
 public extension ButtonStyle where Self == PrimaryButtonStyle {
     static var carpoolPrimary: PrimaryButtonStyle { PrimaryButtonStyle() }
 }

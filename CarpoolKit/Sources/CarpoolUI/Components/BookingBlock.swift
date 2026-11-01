@@ -10,18 +10,21 @@ public struct BookingBlock: View {
     private let personName: String?
     private let color: CarColor
     private let marker: Marker
+    private let drivesIn: Bool
 
     /// - Parameters:
     ///   - time: „08:00–17:30" oder „seit 09:12".
     ///   - personName: zweite Zeile, z. B. „Papa, jede Woche"; sonst der Autoname.
+    ///   - drivesIn: Auto-Icon fährt beim Erscheinen einmal ein (F10).
     public init(time: String, carName: String, personShort: String, personName: String? = nil,
-                color: CarColor, marker: Marker = .none) {
+                color: CarColor, marker: Marker = .none, drivesIn: Bool = false) {
         self.time = time
         self.carName = carName
         self.personShort = personShort
         self.personName = personName
         self.color = color
         self.marker = marker
+        self.drivesIn = drivesIn
     }
 
     public var body: some View {
@@ -35,10 +38,8 @@ public struct BookingBlock: View {
             switch marker {
             case .none: EmptyView()
             case .driving:
-                Image(systemName: "car.side")
-                    .font(.body)
+                DrivingIcon(drivesIn: drivesIn)
                     .foregroundStyle(color.ink)
-                    .accessibilityLabel("fährt gerade")
             case .repeating:
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.subheadline)
@@ -51,6 +52,31 @@ public struct BookingBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(color.tint, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Auto-Icon einer laufenden Fahrt; fährt beim Erscheinen einmal ein (500 ms ease-out), dann steht es.
+/// Bei „Bewegung reduzieren" steht es sofort.
+private struct DrivingIcon: View {
+    /// Startwert entscheidet; spätere Änderungen von `drivesIn` lassen das Icon stehen.
+    @State private var arrived: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(drivesIn: Bool) {
+        _arrived = State(initialValue: !drivesIn)
+    }
+
+    var body: some View {
+        let hidden = !arrived && !reduceMotion
+        Image(systemName: "car.side")
+            .font(.body)
+            .offset(x: hidden ? -40 : 0)
+            .opacity(hidden ? 0 : 1)
+            .accessibilityLabel("fährt gerade")
+            .onAppear {
+                guard !arrived else { return }
+                withAnimation(Motion.driveIn) { arrived = true }
+            }
     }
 }
 

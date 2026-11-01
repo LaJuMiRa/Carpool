@@ -80,15 +80,16 @@ public extension CarRow where Action == EmptyView {
 }
 
 /// Kachel zur Autoauswahl im Reservieren-Formular (bis ca. 3 Autos).
+/// Ohne Status (nil) wird noch geprüft.
 public struct CarTile: View {
     private let naming: CarNaming
     private let paint: String
-    private let status: CarStatus
+    private let status: CarStatus?
     private let statusText: String?
     private let isSelected: Bool
     private let action: () -> Void
 
-    public init(naming: CarNaming, paint: String, status: CarStatus, statusText: String? = nil,
+    public init(naming: CarNaming, paint: String, status: CarStatus?, statusText: String? = nil,
                 isSelected: Bool, action: @escaping () -> Void) {
         self.naming = naming
         self.paint = paint
@@ -106,7 +107,12 @@ public struct CarTile: View {
                     .padding(.horizontal, Spacing.xxs)
                 Text(naming.title).font(.headline).foregroundStyle(Color.ink)
                     .lineLimit(1).minimumScaleFactor(0.8)
-                StatusLabel(status, text: statusText)
+                if let status {
+                    StatusLabel(status, text: statusText)
+                } else {
+                    Text("…").font(.callout.weight(.medium)).foregroundStyle(Color.inkMuted)
+                        .accessibilityLabel("wird geprüft")
+                }
             }
             .padding(Spacing.s)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -117,7 +123,7 @@ public struct CarTile: View {
         }
         .buttonStyle(.plain)
         .animation(Motion.gesture, value: isSelected)
-        .accessibilityLabel("\(naming.spokenName), \(statusText ?? status.label)")
+        .accessibilityLabel("\(naming.spokenName), \(statusText ?? status?.label ?? "wird geprüft")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

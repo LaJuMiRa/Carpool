@@ -34,6 +34,18 @@ public struct CarpoolError: Error, Equatable, Sendable {
         "already_driving": "Du fährst schon ein anderes Auto.",
         "no_running_trip": "Du hast gerade keine Fahrt.",
         "invalid_fuel": "Bitte wähle einen Tankstand.",
+        "invalid_range": "Das Ende muss nach dem Beginn liegen.",
+        "starts_in_past": "Der Beginn liegt in der Vergangenheit.",
+        "range_too_long": "Du kannst höchstens 14 Tage am Stück reservieren.",
+        "invalid_rrule": "Diese Wiederholung geht nicht.",
+        "invalid_until": "Das Ende der Wiederholung liegt vor dem Beginn.",
+        "series_must_end_same_day": "Wiederholte Reservierungen müssen am selben Tag enden.",
+        "no_occurrences": "In diesem Zeitraum gibt es keinen passenden Termin.",
+        "conflict_retry": "Jemand war schneller. Schau noch einmal nach.",
+        "booking_not_found": "Diese Buchung gibt es nicht mehr.",
+        "not_owner": "Das ist nicht deine Buchung.",
+        "not_cancellable": "Diese Buchung lässt sich nicht mehr löschen.",
+        "not_displaceable": "Diese Buchung kannst du nicht übernehmen.",
         "nothing_to_undo": "Rückgängig ist nicht mehr möglich.",
         "undo_expired": "Rückgängig ist nicht mehr möglich."
     ]

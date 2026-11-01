@@ -62,6 +62,12 @@ final class FakeAPI: CarpoolAPI, Sendable {
         var membership: Member?
         var takeError: CarpoolError?
         var returnError: CarpoolError?
+        /// Antworten von `check_reservation` bzw. `reserve`, der Reihe nach (letzte bleibt stehen).
+        var checkResults: [ReservationResult] = [.success]
+        var reserveResults: [ReservationResult] = [.success]
+        var freeCars: [Car] = []
+        var displaceResults: [DisplaceResult] = [.displaced(replacementFound: true)]
+        var requests: [ReservationRequest] = []
         var calls: [String] = []
     }
 
@@ -107,6 +113,29 @@ final class FakeAPI: CarpoolAPI, Sendable {
         if let error = state.withLock({ $0.returnError }) { throw error }
     }
     func undoLastAction() async throws { record("undo") }
+
+    func checkReservation(_ request: ReservationRequest) async throws -> ReservationResult {
+        record("check")
+        return state.withLock { $0.requests.append(request); return Self.next(&$0.checkResults) }
+    }
+    func reserve(_ request: ReservationRequest, displace: Bool, acceptNoReplacement: Bool) async throws
+        -> ReservationResult {
+        record("reserve displace=\(displace) accept=\(acceptNoReplacement)")
+        return state.withLock { $0.requests.append(request); return Self.next(&$0.reserveResults) }
+    }
+    func freeCars(from start: Date, to end: Date) async throws -> [Car] { state.withLock { $0.freeCars } }
+    func displace(bookingID: UUID, acceptNoReplacement: Bool) async throws -> DisplaceResult {
+        record("displace accept=\(acceptNoReplacement)")
+        return state.withLock { Self.next(&$0.displaceResults) }
+    }
+    func cancelBooking(_ bookingID: UUID, wholeSeries: Bool) async throws -> Int {
+        record("cancel series=\(wholeSeries)")
+        return 1
+    }
+
+    private static func next<T>(_ queue: inout [T]) -> T {
+        queue.count > 1 ? queue.removeFirst() : queue[0]
+    }
 
     private func record(_ call: String) {
         state.withLock { $0.calls.append(call) }
