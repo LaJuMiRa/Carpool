@@ -69,3 +69,13 @@ struct MessageScreen: View {
         .background(Color.paper)
     }
 }
+
+extension View {
+    /// Zeigt Fehler einer Aktion (`FamilyStore.actionError`) als Hinweis an.
+    func storeErrorAlert(_ store: FamilyStore) -> some View {
+        alert(store.actionError?.message ?? "", isPresented: Binding(
+            get: { store.actionError != nil }, set: { if !$0 { store.dismissError() } })) {
+            Button("OK", role: .cancel) { store.dismissError() }
+        }
+    }
+}

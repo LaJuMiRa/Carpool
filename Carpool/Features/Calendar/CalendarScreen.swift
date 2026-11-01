@@ -131,10 +131,20 @@ struct CalendarScreen: View {
             BookingBlock(time: entry.timeText, carName: entry.car.title, personShort: entry.personShort,
                          color: CarColor(slot: entry.car.colorSlot),
                          marker: entry.isDriving ? .driving : (entry.isRepeating ? .repeating : .none),
-                         drivesIn: entry.isDriving && !drivenIn.contains(entry.id))
+                         driveAnimation: driveAnimation(for: entry))
                 .accessibilityLabel(entry.accessibilityText)
                 .contextMenu { menu(for: entry) }
                 .onAppear { if entry.isDriving { drivenIn.insert(entry.id) } }
+        }
+    }
+
+    /// Einstellung „Fahrendes Auto": einmal beim ersten Erscheinen, dauerhaft oder aus.
+    private func driveAnimation(for entry: CalendarState.Entry) -> BookingBlock.DriveAnimation {
+        guard entry.isDriving else { return .none }
+        switch store.settings?.calendarCarAnimation ?? .once {
+        case .once: return drivenIn.contains(entry.id) ? .none : .once
+        case .loop: return .loop
+        case .off: return .none
         }
     }
 

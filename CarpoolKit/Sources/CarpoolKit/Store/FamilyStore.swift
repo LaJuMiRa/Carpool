@@ -27,6 +27,8 @@ public final class FamilyStore {
     /// Fehler einer Aktion; die Oberfläche zeigt ihn an und setzt ihn mit `dismissError()` zurück.
     public private(set) var actionError: CarpoolError?
     public private(set) var undoOffer: UndoOffer?
+    /// Eigene Einstellungen; nil, solange nicht geladen.
+    public private(set) var settings: MemberSettings?
 
     public let member: Member
     public let api: any CarpoolAPI
@@ -64,6 +66,9 @@ public final class FamilyStore {
             loadError = nil
         } catch {
             loadError = CarpoolError.from(error)
+        }
+        if settings == nil {
+            settings = try? await api.settings(memberID: member.id)
         }
     }
 
@@ -129,6 +134,46 @@ public final class FamilyStore {
             actionError = CarpoolError.from(error)
             await refresh()
             return nil
+        }
+    }
+
+    // MARK: Mitglieder, Familie, Autos, Schäden, Einstellungen
+
+    /// Führt eine Schreibaktion aus, lädt neu und meldet Erfolg; Fehler landen in `actionError`.
+    @discardableResult
+    public func perform(_ action: @Sendable (any CarpoolAPI) async throws -> Void) async -> Bool {
+        do {
+            try await action(api)
+            await refresh()
+            return true
+        } catch {
+            actionError = CarpoolError.from(error)
+            await refresh()
+            return false
+        }
+    }
+
+    public func rename(firstName: String, short: String) async -> Bool {
+        let name = firstName.trimmingCharacters(in: .whitespaces)
+        let short = short.trimmingCharacters(in: .whitespaces)
+        guard (2...40).contains(name.count), short.count == 2 else {
+            actionError = CarpoolError(code: "invalid_name")
+            return false
+        }
+        return await perform { [member] in
+            try await $0.updateName(memberID: member.id, firstName: name, short: short)
+        }
+    }
+
+    /// Einstellungen sofort lokal übernehmen, dann speichern; bei Fehler zurück.
+    public func update(_ new: MemberSettings) async {
+        let before = settings
+        settings = new
+        do {
+            try await api.updateSettings(new)
+        } catch {
+            settings = before
+            actionError = CarpoolError.from(error)
         }
     }
 

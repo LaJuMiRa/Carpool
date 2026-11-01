@@ -4,27 +4,30 @@ import SwiftUI
 public struct BookingBlock: View {
     public enum Marker { case none, driving, repeating }
 
+    /// Bewegung des Auto-Icons bei laufender Fahrt (Einstellung „Fahrendes Auto").
+    public enum DriveAnimation: Sendable { case none, once, loop }
+
     private let time: String
     private let carName: String
     private let personShort: String
     private let personName: String?
     private let color: CarColor
     private let marker: Marker
-    private let drivesIn: Bool
+    private let driveAnimation: DriveAnimation
 
     /// - Parameters:
     ///   - time: „08:00–17:30" oder „seit 09:12".
     ///   - personName: zweite Zeile, z. B. „Papa, jede Woche"; sonst der Autoname.
-    ///   - drivesIn: Auto-Icon fährt beim Erscheinen einmal ein (F10).
+    ///   - driveAnimation: Auto-Icon fährt beim Erscheinen einmal bzw. immer wieder ein (F10).
     public init(time: String, carName: String, personShort: String, personName: String? = nil,
-                color: CarColor, marker: Marker = .none, drivesIn: Bool = false) {
+                color: CarColor, marker: Marker = .none, driveAnimation: DriveAnimation = .none) {
         self.time = time
         self.carName = carName
         self.personShort = personShort
         self.personName = personName
         self.color = color
         self.marker = marker
-        self.drivesIn = drivesIn
+        self.driveAnimation = driveAnimation
     }
 
     public var body: some View {
@@ -38,8 +41,14 @@ public struct BookingBlock: View {
             switch marker {
             case .none: EmptyView()
             case .driving:
-                DrivingIcon(drivesIn: drivesIn)
-                    .foregroundStyle(color.ink)
+                Group {
+                    if driveAnimation == .loop {
+                        LoopingDrivingIcon()
+                    } else {
+                        DrivingIcon(drivesIn: driveAnimation == .once)
+                    }
+                }
+                .foregroundStyle(color.ink)
             case .repeating:
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.subheadline)
@@ -77,6 +86,37 @@ private struct DrivingIcon: View {
                 guard !arrived else { return }
                 withAnimation(Motion.driveIn) { arrived = true }
             }
+    }
+}
+
+/// Auto-Icon, das alle 6 s einfährt, steht und ausblendet (Einstellung „Dauerhaft").
+private struct LoopingDrivingIcon: View {
+    private struct Values {
+        var x: CGFloat = -40
+        var opacity: Double = 0
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let icon = Image(systemName: "car.side").font(.body).accessibilityLabel("fährt gerade")
+        if reduceMotion {
+            icon
+        } else {
+            icon.keyframeAnimator(initialValue: Values(), repeating: true) { content, value in
+                content.offset(x: value.x).opacity(value.opacity)
+            } keyframes: { _ in
+                KeyframeTrack(\.x) {
+                    CubicKeyframe(0, duration: 0.5)
+                    LinearKeyframe(0, duration: 5.5)
+                }
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(1, duration: 0.15)
+                    LinearKeyframe(1, duration: 5.35)
+                    LinearKeyframe(0, duration: 0.5)
+                }
+            }
+        }
     }
 }
 

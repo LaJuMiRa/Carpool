@@ -47,14 +47,16 @@ public final class ReservationModel {
     /// Wartezeit, bevor eine Änderung geprüft wird.
     static let checkDebounce: Duration = .milliseconds(250)
 
-    public init(snapshot: FamilySnapshot, api: any CarpoolAPI, day: Date,
+    /// - Parameter carID: vorausgewähltes Auto (z. B. aus dem Auto-Detail).
+    public init(snapshot: FamilySnapshot, api: any CarpoolAPI, day: Date, carID: UUID? = nil,
                 clock: @escaping @Sendable () -> Date = { Date() }) {
         self.snapshot = snapshot
         self.api = api
         self.clock = clock
         self.text = TimeText(family: snapshot.family)
         let now = clock()
-        let car = snapshot.cars.first { $0.primaryMemberId == snapshot.me.id } ?? snapshot.cars.first
+        let car = carID.flatMap(snapshot.car) ?? snapshot.cars.first { $0.primaryMemberId == snapshot.me.id }
+            ?? snapshot.cars.first
         self.draft = .initial(day: day, carID: car?.id, now: now, calendar: text.calendar)
     }
 

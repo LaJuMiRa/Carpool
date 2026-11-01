@@ -13,9 +13,10 @@ struct ReservationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(snapshot: FamilySnapshot, api: any CarpoolAPI, day: Date, onDone: @escaping () -> Void) {
+    init(snapshot: FamilySnapshot, api: any CarpoolAPI, day: Date, carID: UUID? = nil,
+         onDone: @escaping () -> Void) {
         self.onDone = onDone
-        _model = State(initialValue: ReservationModel(snapshot: snapshot, api: api, day: day))
+        _model = State(initialValue: ReservationModel(snapshot: snapshot, api: api, day: day, carID: carID))
     }
 
     var body: some View {

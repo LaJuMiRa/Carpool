@@ -181,11 +181,21 @@ Berechnet in `CarpoolKit/Sources/CarpoolKit/Calendar/CalendarState.swift` und `�
 - **Konflikt-Hinweis:** „Felix hat Octavia von 10:00 bis 16:00." (anderer Tag: „… morgen von …", „… am Samstag von …"), „Mama fährt Octavia bis 17:30.", „Mama ist gerade mit Octavia unterwegs.", „Du hast Octavia schon von …", mehrere Termine „Felix hat Octavia an 3 Terminen." / „Octavia ist an 3 Terminen belegt.". Darunter alle freien Autos zum Tauschen, als Hauptnutzer „Übernehmen"; ohne beides „Kein anderes Auto ist frei.". Primär-Button dann gesperrt: „Octavia ist belegt".
 - **Übernehmen (F14):** „Felix’ Buchung übernehmen?" (Genitiv: Name auf s/ß/x/z → ’, sonst „Lisas"), „Felix verliert die Reservierung morgen, 10:00–16:00, und bekommt eine Nachricht.", Button „Octavia übernehmen" (danger), „Abbrechen". Ohne Ersatzauto danach: „Kein Ersatzauto frei" / „Für Felix ist in dieser Zeit kein anderes Auto frei. Willst du trotzdem übernehmen?" / „Trotzdem übernehmen".
 
+## Mitglieder, Einstellungen, Autos, Schäden (Stand Phase 6)
+
+Berechnet in `CarpoolKit/Sources/CarpoolKit/Members/MembersState.swift`, `…/CarDetail/CarDetailState.swift`, `…/Cars/CarForm.swift`. Schreiben direkt auf die Tabellen (RLS erlaubt es): eigener Name/Kürzel, Rollen und Familienname (Admin), Autos (Admin), Schäden, Einstellungen.
+- **Mitglieder (F15):** Titel = Familienname, Zahnrad → Einstellungen. Zeile: Avatar (blass = noch nicht beigetreten), Name („Lisa (du)"), Admin-Badge. Zweite Zeile in dieser Reihenfolge: „fährt gerade Octavia" (Statusfarbe unterwegs) → „Hauptnutzer von Flitzer" (+ „· heute 18:00" bei nächster Fahrt, Punkt in Autofarbe) → „nächste Fahrt heute 14:00" / „morgen 08:00" / „Mo 08:00" → „noch nicht beigetreten". Admins: Kontextmenü „Zum Admin machen" / „Admin-Rechte entfernen".
+- Einladung: Code in SF Mono, „Einladung teilen" (Teilen-Blatt): „Komm in unsere Familie „{Name}“ bei Carpool. Melde dich in der App an und gib diesen Code ein: {Code}".
+- **Einstellungen (F16):** Profil (Vorname, Kürzel; Kürzel folgt dem Namen, bis man es selbst ändert), Familie (nur Admin: Name, „Neuer Einladungscode" mit Bestätigung „Der alte Code funktioniert dann nicht mehr."), Autos (Admin: bearbeiten, „Auto hinzufügen"), 5 Benachrichtigungs-Schalter, Darstellung: Erscheinungsbild System/Hell/Dunkel (nur auf dem Gerät), Startanimation Erster Start/Immer, Fahrendes Auto Einmal/Dauerhaft/Aus (Kalender), Abmelden (rot).
+- **Auto hinzufügen (F17):** ein Feld „Marke und Modell"; erstes Wort = Marke (bekannte Mehrwort-Marken wie „Land Rover" erkannt), Rest = Modell; bei nur einem Wort Hinweis „Marke und Modell, z. B. „VW Golf“". Lackfarben schwarz, weiß, silber, blau, rot, grau, grün; Bild erscheint mit Überblenden + Unschärfe 300 ms. Optional Spitzname, Hauptnutzer, Kennzeichen (groß geschrieben). Bearbeiten zusätzlich Pickerl bis, Service fällig, Kilometerstand und „Auto entfernen" (archiviert).
+- **Auto-Detail (F05):** Tippen auf Auto in der Übersicht (Zoom-Übergang). Status „bei dir · seit 09:12" bzw. wie Übersicht, „Hauptnutzer: Papa" / „du". Buttons: Zurückgeben (eigene Fahrt) oder Nehmen + Reservieren (mit diesem Auto). Schäden mit „Melden"; „Keine offenen Schäden."; Zeile „Kratzer …" + „Lisa, 12. Okt · fahrbereit" / „nicht fahrbereit". Nächste Buchungen (max. 4): „Heute, 18:00–22:00" / „Morgen, …" / „Mo, 2. Nov, …", Person bzw. „Papa, jede Woche". Zustand: Tank, Pickerl „bis März 2027" (≤ 30 Tage gelb, danach „abgelaufen" rot; gilt bis Monatsende), Service „heute" / „morgen" / „in 5 Tagen" / „in 3 Wochen" / „Mai 2027" (≤ 30 Tage gelb, „überfällig" rot), Kennzeichen, Kilometerstand.
+- **Schaden melden:** Foto (Kamera oder Mediathek, verkleinert auf max. 1600 px, JPEG 0,7) nach `damage-photos/<family_id>/<uuid>.jpg`, „Was ist passiert?" (Pflicht, max. 1000 Zeichen), „Fahrbereit" (Standard ja). Offene Schäden: Warn-Icon an der Karte. Schaden antippen → Foto groß, „Erledigt" (mit Bestätigung) setzt `resolved_at`.
+
 ## Entwicklung und Tests
 - Testkonten (nur Entwicklung, Passwort beim Projektinhaber): `papa@test.local` (Papa, Admin), `lisa@test.local` (Lisa), `neu@test.local` (ohne Familie). Vor dem echten Einsatz löschen.
 - Automatische Anmeldung im Debug-Build: Umgebungsvariablen `DEV_EMAIL`/`DEV_PASSWORD`, im Simulator per `SIMCTL_CHILD_DEV_EMAIL=… SIMCTL_CHILD_DEV_PASSWORD=… xcrun simctl launch …`.
 - UI-Test Kernablauf gegen das echte Backend (`CarpoolAppUITests`): `TEST_RUNNER_DEV_EMAIL=lisa@test.local TEST_RUNNER_DEV_PASSWORD=… xcodebuild test …`; ohne die Variablen wird er übersprungen.
-- **Beispiel-Familie ohne Netzwerk** (nur Debug): Startargument `-previewFamily` öffnet die App als Lisa mit `PreviewAPI` (Lisa ist Hauptnutzerin von Flitzer; Konflikte grob nachgestellt). Darauf läuft `CalendarFlowUITests` (Konflikt → Tauschen → Übernehmen) ohne Testkonto.
+- **Beispiel-Familie ohne Netzwerk** (nur Debug): Startargument `-previewFamily` öffnet die App als Lisa mit `PreviewAPI` (Lisa ist Hauptnutzerin von Flitzer; Konflikte grob nachgestellt). Lisa ist dort Admin, Mama Hauptnutzerin von Radieschen (mit Schaden). Darauf laufen `CalendarFlowUITests` (Konflikt → Tauschen → Übernehmen) und `FamilyFlowUITests` (Auto-Detail, Schaden melden, Mitglieder, Einstellungen, Auto hinzufügen) ohne Testkonto.
 - Supabase Auth: „Confirm email" für die Testphase ausschalten (Dashboard → Authentication → Sign In / Providers → Email), sonst braucht jede Registrierung einen Bestätigungslink.
 
 ## Design System
@@ -271,11 +281,16 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - Vorschau-Seite: App mit Startargument `-designCatalog` starten (nur Debug), optional `-designCatalogSection "Autos"` springt zu einem Abschnitt.
 - Kalender-Titel zeigt den Monat (wie Mockup F10), obwohl die Grundsätze „kein Datum oben" sagen – ohne Monat ist die Woche nicht einzuordnen.
 - Übernehmen-Text sagt „die Reservierung" statt „seine Reservierung" (Mockup F14), damit er für alle Namen passt.
-- Auto-Icon im Kalender fährt nur beim ersten Erscheinen je Fahrt ein; Einstellung einmal/dauerhaft/aus folgt mit den Einstellungen (Phase 6).
+- Auto-Icon im Kalender: „Einmal" = beim ersten Erscheinen je Fahrt, „Dauerhaft" = alle 6 s einfahren/ausblenden, „Aus" = steht.
+- Auto-Detail (F05) kam in Phase 6 dazu, weil die Schäden dort leben.
+- Erscheinungsbild wird nur auf dem Gerät gespeichert (`@AppStorage`), nicht in `settings`. Startanimation wird gespeichert, wirkt aber erst mit dem Splash (Phase 8).
+- Einstellungen ohne „Schnellzugriff" (Widgets, Kurzbefehle) – kommt mit Phase 7.
 - DerivedData nicht im Projektordner ablegen (iCloud-Ordner hängt Metadaten an → Codesign-Fehler „detritus not allowed").
 
 ## Offene Punkte
 - Kontextmenü F11 zeigt im Mockup auch „Bearbeiten", „Verlängern", „An jemand übergeben" – dafür fehlen RPCs (`update_booking`, `extend_booking`, `transfer_booking`); bisher nur Löschen und Übernehmen.
+- Mitglieder entfernen geht noch nicht (keine RPC/Policy dafür).
+- Schadenfotos werden beim „Erledigt" nicht gelöscht (Storage-Policy erlaubt Löschen nur dem Hochlader).
 - Kalender zeigt nur aktive Buchungen; abgeschlossene Fahrten vergangener Tage fehlen (bräuchte eigene Abfrage).
 - **Anbieter für Fahrzeugbilder** (freigestellt, nach Marke/Modell/Farbe): Kosten, Lizenz und Abdeckung prüfen; bis dahin neutrale Silhouette je Karosserieform.
 - **App-Store-Name:** „Carpool" ist vermutlich vergeben; Anzeigename auf dem iPhone bleibt „Carpool", Store-Eintrag ggf. „Carpool – Familienautos". Für TestFlight egal.

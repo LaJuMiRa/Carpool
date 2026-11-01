@@ -1,6 +1,7 @@
 import Auth
 import Foundation
 import PostgREST
+import Storage
 
 /// Fehler mit festem Code (siehe CLAUDE.md, „Fehlercodes") und deutschem Nutzertext.
 public struct CarpoolError: Error, Equatable, Sendable {
@@ -28,6 +29,11 @@ public struct CarpoolError: Error, Equatable, Sendable {
         "invalid_invite_code": "Diesen Einladungscode gibt es nicht.",
         "name_taken": "Diesen Namen gibt es in der Familie schon.",
         "admin_required": "Das dürfen nur Admins.",
+        "invalid_name": "Der Name braucht mindestens 2 Zeichen, das Kürzel genau 2.",
+        "last_admin": "Die Familie braucht mindestens einen Admin.",
+        "member_not_in_family": "Diese Person gehört nicht zur Familie.",
+        "photo_upload": "Das Foto ließ sich nicht hochladen. Versuch es noch einmal.",
+        "photo_load": "Das Foto lässt sich gerade nicht laden.",
         "car_not_found": "Dieses Auto gibt es nicht mehr.",
         "car_busy": "Das Auto ist gerade unterwegs.",
         "car_reserved": "Das Auto ist gerade für jemand anderen reserviert.",
@@ -56,6 +62,8 @@ public struct CarpoolError: Error, Equatable, Sendable {
             return error
         case let error as PostgrestError:
             return CarpoolError(code: messages[error.message] != nil ? error.message : "unknown")
+        case is StorageError:
+            return CarpoolError(code: "photo_upload")
         case let error as AuthError:
             return CarpoolError(code: authCode(error.errorCode.rawValue))
         case is URLError:

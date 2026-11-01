@@ -8,7 +8,9 @@ struct OverviewScreen: View {
 
     @State private var returnTrip: OverviewState.MyTrip?
     @State private var appIsActive = true
+    @State private var path: [UUID] = []
     @Namespace private var carSpace
+    @Namespace private var zoomSpace
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -16,10 +18,17 @@ struct OverviewScreen: View {
     private static let undoDuration: Duration = .seconds(5)
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            content(now: context.date)
+        NavigationStack(path: $path) {
+            TimelineView(.everyMinute) { context in
+                content(now: context.date)
+            }
+            .background(Color.paper)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: UUID.self) { carID in
+                CarDetailScreen(carID: carID, store: store) { returnTrip = $0 }
+                    .navigationTransition(.zoom(sourceID: carID, in: zoomSpace))
+            }
         }
-        .background(Color.paper)
         .safeAreaInset(edge: .bottom) { undoToast }
         .sheet(item: $returnTrip) { trip in
             ReturnSheet(trip: trip) { fuel in
@@ -37,6 +46,7 @@ struct OverviewScreen: View {
     private func content(now: Date) -> some View {
         if let snapshot = store.snapshot {
             let state = OverviewState(snapshot: snapshot, now: now)
+            let damaged = Set(snapshot.damages.map(\.carId))
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
                     Text(state.title)
@@ -45,10 +55,15 @@ struct OverviewScreen: View {
                         .accessibilityAddTraits(.isHeader)
                     if let trip = state.myTrip {
                         MyTripCard(trip: trip, namespace: carSpace) { returnTrip = trip }
+                            .matchedTransitionSource(id: trip.car.id, in: zoomSpace)
+                            .contentShape(Rectangle())
+                            .onTapGesture { path.append(trip.car.id) }
+                            .accessibilityAction(named: "Details") { path.append(trip.car.id) }
+                            .accessibilityIdentifier("car.\(trip.car.title)")
                             .transition(.opacity)
                         if !state.rows.isEmpty { SectionHeader("Andere Autos") }
                     }
-                    carList(state.rows)
+                    carList(state.rows, damaged: damaged)
                 }
                 .padding(.horizontal, Spacing.page)
                 .padding(.top, Spacing.l)
@@ -65,12 +80,13 @@ struct OverviewScreen: View {
         }
     }
 
-    private func carList(_ rows: [OverviewState.Row]) -> some View {
+    private func carList(_ rows: [OverviewState.Row], damaged: Set<UUID>) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 if index > 0 { Hairline() }
                 CarRow(naming: row.car.naming, paint: row.car.paint, status: row.status,
                        statusText: row.statusText, detail: row.detail,
+                       hasOpenDamage: damaged.contains(row.car.id),
                        silhouetteID: row.car.id, namespace: carSpace) {
                     if row.canTake {
                         Button("Nehmen") { Task { await store.take(row.car) } }
@@ -79,6 +95,11 @@ struct OverviewScreen: View {
                             .accessibilityIdentifier("take.\(row.car.title)")
                     }
                 }
+                .matchedTransitionSource(id: row.car.id, in: zoomSpace)
+                .contentShape(Rectangle())
+                .onTapGesture { path.append(row.car.id) }
+                .accessibilityAction(named: "Details") { path.append(row.car.id) }
+                .accessibilityIdentifier("car.\(row.car.title)")
                 .transition(.opacity)
                 .animation(Motion.resolved(Motion.standard, reduceMotion: reduceMotion)
                     .delay(Double(index) * 0.04), value: rows.map(\.id))

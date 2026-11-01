@@ -5,6 +5,7 @@ import SwiftUI
 @main
 struct CarpoolApp: App {
     @State private var session = AppSession.live()
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
@@ -23,6 +24,7 @@ struct CarpoolApp: App {
                 #endif
             }
             .tint(Color.ink)
+            .preferredColorScheme(Appearance(rawValue: appearance)?.colorScheme)
         }
     }
 

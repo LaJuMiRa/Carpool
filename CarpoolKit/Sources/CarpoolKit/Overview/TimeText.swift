@@ -36,6 +36,11 @@ public struct TimeText: Sendable {
         return sameYear ? month : "\(month) \(calendar.component(.year, from: date))"
     }
 
+    /// „März 2027"
+    public func monthYear(_ date: Date) -> String {
+        "\(date.formatted(style.month(.wide))) \(calendar.component(.year, from: date))"
+    }
+
     /// „31. Okt"
     public func dayMonth(_ date: Date) -> String {
         let month = date.formatted(style.month(.abbreviated)).replacingOccurrences(of: ".", with: "")

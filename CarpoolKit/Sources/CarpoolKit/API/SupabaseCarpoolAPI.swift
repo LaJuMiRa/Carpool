@@ -86,8 +86,12 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
                 .or("ends_at.is.null,ends_at.gt.\(now)")
                 .order("starts_at")
                 .execute().value
-            return try await FamilySnapshot(family: family, me: member, members: members, cars: cars,
-                                            bookings: bookings)
+            async let damages: [Damage] = client.from("damages").select().is("resolved_at", value: nil)
+                .order("created_at", ascending: false).execute().value
+            let all = try await members
+            // Eigener Eintrag frisch aus der Datenbank (Name, Kürzel, Rolle können sich geändert haben).
+            return try await FamilySnapshot(family: family, me: all.first { $0.id == member.id } ?? member,
+                                            members: all, cars: cars, bookings: bookings, damages: damages)
         }
     }
 
@@ -225,6 +229,147 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
                 .execute().value
         }
         return response.cancelled_count
+    }
+
+    // MARK: Mitglieder und Familie
+
+    public func updateName(memberID: UUID, firstName: String, short: String) async throws {
+        try await call {
+            try await client.from("members").update(["first_name": firstName, "short": short])
+                .eq("id", value: memberID).execute()
+        }
+    }
+
+    public func setRole(_ role: Member.Role, memberID: UUID) async throws {
+        try await call {
+            try await client.from("members").update(["role": role.rawValue]).eq("id", value: memberID).execute()
+        }
+    }
+
+    public func renameFamily(_ familyID: UUID, name: String) async throws {
+        try await call {
+            try await client.from("families").update(["name": name]).eq("id", value: familyID).execute()
+        }
+    }
+
+    public func regenerateInviteCode() async throws -> String {
+        try await call { try await client.rpc("regenerate_invite_code").execute().value }
+    }
+
+    // MARK: Autos
+
+    /// Zeile für `cars`; leere optionale Felder werden ausdrücklich als null geschickt.
+    private struct CarRowParams: Encodable {
+        let input: CarInput
+        let familyID: UUID?
+
+        enum CodingKeys: String, CodingKey {
+            case make, model, paint, nickname, plate
+            case familyId = "family_id"
+            case primaryMemberId = "primary_member_id"
+            case pickerlUntil = "pickerl_until"
+            case serviceDue = "service_due"
+            case odometerKm = "odometer_km"
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(familyID, forKey: .familyId)
+            try container.encode(input.make, forKey: .make)
+            try container.encode(input.model, forKey: .model)
+            try container.encode(input.paint, forKey: .paint)
+            try container.encode(input.nickname, forKey: .nickname)
+            try container.encode(input.plate, forKey: .plate)
+            try container.encode(input.primaryMemberId, forKey: .primaryMemberId)
+            try container.encode(input.pickerlUntil, forKey: .pickerlUntil)
+            try container.encode(input.serviceDue, forKey: .serviceDue)
+            try container.encode(input.odometerKm, forKey: .odometerKm)
+        }
+    }
+
+    public func addCar(_ input: CarInput, familyID: UUID) async throws {
+        try await call {
+            try await client.from("cars").insert(CarRowParams(input: input, familyID: familyID)).execute()
+        }
+    }
+
+    public func updateCar(_ carID: UUID, input: CarInput) async throws {
+        try await call {
+            try await client.from("cars").update(CarRowParams(input: input, familyID: nil))
+                .eq("id", value: carID).execute()
+        }
+    }
+
+    public func archiveCar(_ carID: UUID) async throws {
+        try await call {
+            try await client.from("cars").update(["archived": true]).eq("id", value: carID).execute()
+        }
+    }
+
+    // MARK: Schäden
+
+    static let damageBucket = "damage-photos"
+
+    public func reportDamage(_ report: DamageReport, familyID: UUID) async throws {
+        struct Row: Encodable {
+            let car_id: UUID
+            let description: String
+            let drivable: Bool
+            let photo_path: String?
+        }
+        var path: String?
+        if let photo = report.photo {
+            let name = "\(familyID.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
+            try await call {
+                try await client.storage.from(Self.damageBucket)
+                    .upload(name, data: photo, options: FileOptions(contentType: "image/jpeg"))
+            }
+            path = name
+        }
+        let row = Row(car_id: report.carID, description: report.description, drivable: report.drivable,
+                      photo_path: path)
+        try await call { try await client.from("damages").insert(row).execute() }
+    }
+
+    public func resolveDamage(_ damageID: UUID) async throws {
+        try await call {
+            try await client.from("damages").update(["resolved_at": Date().formatted(.iso8601)])
+                .eq("id", value: damageID).execute()
+        }
+    }
+
+    public func damagePhoto(path: String) async throws -> Data {
+        try await call { try await client.storage.from(Self.damageBucket).download(path: path) }
+    }
+
+    // MARK: Einstellungen
+
+    public func settings(memberID: UUID) async throws -> MemberSettings {
+        try await call {
+            try await client.from("settings").select().eq("member_id", value: memberID).single().execute().value
+        }
+    }
+
+    public func updateSettings(_ settings: MemberSettings) async throws {
+        struct Row: Encodable {
+            let notify_car_free: Bool
+            let notify_booking_displaced: Bool
+            let notify_reservation_soon: Bool
+            let notify_return_overdue: Bool
+            let notify_service_pickerl: Bool
+            let calendar_car_animation: String
+            let launch_animation: String
+        }
+        let row = Row(notify_car_free: settings.notifyCarFree,
+                      notify_booking_displaced: settings.notifyBookingDisplaced,
+                      notify_reservation_soon: settings.notifyReservationSoon,
+                      notify_return_overdue: settings.notifyReturnOverdue,
+                      notify_service_pickerl: settings.notifyServicePickerl,
+                      calendar_car_animation: settings.calendarCarAnimation.rawValue,
+                      launch_animation: settings.launchAnimation.rawValue)
+        try await call {
+            try await client.from("settings").update(row).eq("member_id", value: settings.memberId).execute()
+        }
     }
 
     // MARK: Fehler

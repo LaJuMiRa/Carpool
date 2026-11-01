@@ -51,4 +51,27 @@ public protocol CarpoolAPI: Sendable {
     /// Eigene Reservierung stornieren; liefert die Zahl stornierter Termine.
     @discardableResult
     func cancelBooking(_ bookingID: UUID, wholeSeries: Bool) async throws -> Int
+
+    // Mitglieder und Familie
+    /// Eigener Vorname und Kürzel.
+    func updateName(memberID: UUID, firstName: String, short: String) async throws
+    /// Rolle ändern (nur Admins; der letzte Admin bleibt Admin).
+    func setRole(_ role: Member.Role, memberID: UUID) async throws
+    func renameFamily(_ familyID: UUID, name: String) async throws
+    /// Neuer Einladungscode (Admin).
+    func regenerateInviteCode() async throws -> String
+
+    // Autos (nur Admins)
+    func addCar(_ input: CarInput, familyID: UUID) async throws
+    func updateCar(_ carID: UUID, input: CarInput) async throws
+    func archiveCar(_ carID: UUID) async throws
+
+    // Schäden
+    func reportDamage(_ report: DamageReport, familyID: UUID) async throws
+    func resolveDamage(_ damageID: UUID) async throws
+    func damagePhoto(path: String) async throws -> Data
+
+    // Einstellungen
+    func settings(memberID: UUID) async throws -> MemberSettings
+    func updateSettings(_ settings: MemberSettings) async throws
 }

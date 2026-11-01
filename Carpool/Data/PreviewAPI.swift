@@ -7,7 +7,7 @@ import Foundation
 struct PreviewAPI: CarpoolAPI {
     static let familyID = UUID()
     static let lisa = Member(id: UUID(), familyId: familyID, userId: UUID(), firstName: "Lisa", short: "Li",
-                             role: .member)
+                             role: .admin)
     static let mama = Member(id: UUID(), familyId: familyID, userId: nil, firstName: "Mama", short: "Ma",
                              role: .admin)
     static let jonas = Member(id: UUID(), familyId: familyID, userId: nil, firstName: "Jonas", short: "Jo",
@@ -16,12 +16,20 @@ struct PreviewAPI: CarpoolAPI {
                               role: .member)
 
     static let radieschen = Car(id: UUID(), familyId: familyID, make: "VW", model: "Golf", paint: "silber",
-                                nickname: "Radieschen", colorSlot: 1, fuelQuarters: 3)
+                                nickname: "Radieschen", plate: "BN-123AB", primaryMemberId: mama.id, colorSlot: 1,
+                                fuelQuarters: 3, pickerlUntil: "2027-03-31",
+                                serviceDue: CarDetailState.string(from: start.addingTimeInterval(21 * 86_400),
+                                                                  calendar: .current))
     static let octavia = Car(id: UUID(), familyId: familyID, make: "Škoda", model: "Octavia", paint: "dunkelgrau",
                              nickname: nil, colorSlot: 2, fuelQuarters: 4)
     static let flitzer = Car(id: UUID(), familyId: familyID, make: "Toyota", model: "Yaris", paint: "blau",
                              nickname: "Flitzer", primaryMemberId: lisa.id, colorSlot: 3, fuelQuarters: 2)
     static let start = Date()
+    static let damages = [
+        Damage(id: UUID(), familyId: familyID, carId: radieschen.id, reportedBy: lisa.id,
+               description: "Kratzer Stoßstange hinten", drivable: true,
+               createdAt: start.addingTimeInterval(-19 * 86_400))
+    ]
 
     static let bookings: [Booking] = {
         let now = start
@@ -83,11 +91,24 @@ struct PreviewAPI: CarpoolAPI {
     }
 
     func cancelBooking(_ bookingID: UUID, wholeSeries: Bool) async throws -> Int { 1 }
+    func updateName(memberID: UUID, firstName: String, short: String) async throws {}
+    func setRole(_ role: Member.Role, memberID: UUID) async throws {}
+    func renameFamily(_ familyID: UUID, name: String) async throws {}
+    func regenerateInviteCode() async throws -> String { "NEU-7QX" }
+    func addCar(_ input: CarInput, familyID: UUID) async throws {}
+    func updateCar(_ carID: UUID, input: CarInput) async throws {}
+    func archiveCar(_ carID: UUID) async throws {}
+    func reportDamage(_ report: DamageReport, familyID: UUID) async throws {}
+    func resolveDamage(_ damageID: UUID) async throws {}
+    func damagePhoto(path: String) async throws -> Data { Data() }
+    func settings(memberID: UUID) async throws -> MemberSettings { MemberSettings(memberId: memberID) }
+    func updateSettings(_ settings: MemberSettings) async throws {}
 
     func snapshot(for member: Member) async throws -> FamilySnapshot {
         FamilySnapshot(family: Family(id: Self.familyID, name: "Familie Berger", inviteCode: "K7P-2QX"), me: member,
                        members: [Self.mama, Self.lisa, Self.jonas, Self.felix],
-                       cars: [Self.radieschen, Self.octavia, Self.flitzer], bookings: Self.bookings)
+                       cars: [Self.radieschen, Self.octavia, Self.flitzer], bookings: Self.bookings,
+                       damages: Self.damages)
     }
 
     private func conflicts(car: UUID, from start: Date, to end: Date) -> [ReservationConflict] {

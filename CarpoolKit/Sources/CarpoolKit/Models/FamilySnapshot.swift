@@ -9,13 +9,23 @@ public struct FamilySnapshot: Sendable, Hashable {
     public let cars: [Car]
     /// Aktive Buchungen, die noch nicht vorbei sind.
     public let bookings: [Booking]
+    /// Offene Schäden, neueste zuerst.
+    public let damages: [Damage]
 
-    public init(family: Family, me: Member, members: [Member], cars: [Car], bookings: [Booking]) {
+    public init(family: Family, me: Member, members: [Member], cars: [Car], bookings: [Booking],
+                damages: [Damage] = []) {
         self.family = family
         self.me = me
         self.members = members
         self.cars = cars.sorted { $0.colorSlot < $1.colorSlot }
         self.bookings = bookings.sorted { $0.startsAt < $1.startsAt }
+        self.damages = damages.filter(\.isOpen).sorted { $0.createdAt > $1.createdAt }
+    }
+
+    public var isAdmin: Bool { me.role == .admin }
+
+    public func openDamages(for carID: UUID) -> [Damage] {
+        damages.filter { $0.carId == carID }
     }
 
     public func member(_ id: UUID) -> Member? { members.first { $0.id == id } }
@@ -40,19 +50,21 @@ public struct FamilySnapshot: Sendable, Hashable {
                            startsAt: date, endsAt: nil, plannedEndsAt: ownReservation?.endsAt, kind: .trip,
                            fuelQuartersOnTake: car.fuelQuarters)
         let others = bookings.filter { $0.id != ownReservation?.id }
-        return FamilySnapshot(family: family, me: me, members: members, cars: cars, bookings: others + [trip])
+        return FamilySnapshot(family: family, me: me, members: members, cars: cars, bookings: others + [trip],
+                              damages: damages)
     }
 
     /// Lokale Vorschau von „Löschen".
     public func removing(_ bookingIDs: Set<UUID>) -> FamilySnapshot {
         FamilySnapshot(family: family, me: me, members: members, cars: cars,
-                       bookings: bookings.filter { !bookingIDs.contains($0.id) })
+                       bookings: bookings.filter { !bookingIDs.contains($0.id) }, damages: damages)
     }
 
     /// Lokale Vorschau von „Zurückgeben".
     public func applyingReturn(carID: UUID, fuel: FuelLevel) -> FamilySnapshot {
         let remaining = bookings.filter { !($0.isRunningTrip && $0.carId == carID && $0.memberId == me.id) }
         let updatedCars = cars.map { $0.id == carID ? $0.with(fuelQuarters: fuel.quarters) : $0 }
-        return FamilySnapshot(family: family, me: me, members: members, cars: updatedCars, bookings: remaining)
+        return FamilySnapshot(family: family, me: me, members: members, cars: updatedCars, bookings: remaining,
+                              damages: damages)
     }
 }

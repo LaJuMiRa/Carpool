@@ -68,6 +68,8 @@ final class FakeAPI: CarpoolAPI, Sendable {
         var freeCars: [Car] = []
         var displaceResults: [DisplaceResult] = [.displaced(replacementFound: true)]
         var requests: [ReservationRequest] = []
+        var settings: MemberSettings?
+        var writeError: CarpoolError?
         var calls: [String] = []
     }
 
@@ -131,6 +133,35 @@ final class FakeAPI: CarpoolAPI, Sendable {
     func cancelBooking(_ bookingID: UUID, wholeSeries: Bool) async throws -> Int {
         record("cancel series=\(wholeSeries)")
         return 1
+    }
+
+    func updateName(memberID: UUID, firstName: String, short: String) async throws {
+        try write("name \(firstName) \(short)")
+    }
+    func setRole(_ role: Member.Role, memberID: UUID) async throws { try write("role \(role.rawValue)") }
+    func renameFamily(_ familyID: UUID, name: String) async throws { try write("family \(name)") }
+    func regenerateInviteCode() async throws -> String {
+        try write("code")
+        return "NEU-123"
+    }
+    func addCar(_ input: CarInput, familyID: UUID) async throws { try write("addCar \(input.make) \(input.model)") }
+    func updateCar(_ carID: UUID, input: CarInput) async throws { try write("updateCar \(input.model)") }
+    func archiveCar(_ carID: UUID) async throws { try write("archiveCar") }
+    func reportDamage(_ report: DamageReport, familyID: UUID) async throws {
+        try write("damage \(report.description) photo=\(report.photo != nil)")
+    }
+    func resolveDamage(_ damageID: UUID) async throws { try write("resolve") }
+    func damagePhoto(path: String) async throws -> Data { Data() }
+    func settings(memberID: UUID) async throws -> MemberSettings {
+        state.withLock { $0.settings } ?? MemberSettings(memberId: memberID)
+    }
+    func updateSettings(_ settings: MemberSettings) async throws {
+        try write("settings \(settings.calendarCarAnimation.rawValue)")
+    }
+
+    private func write(_ call: String) throws {
+        record(call)
+        if let error = state.withLock({ $0.writeError }) { throw error }
     }
 
     private static func next<T>(_ queue: inout [T]) -> T {
