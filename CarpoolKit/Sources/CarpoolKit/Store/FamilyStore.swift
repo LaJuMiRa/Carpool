@@ -29,6 +29,9 @@ public final class FamilyStore {
     public private(set) var undoOffer: UndoOffer?
     /// Eigene Einstellungen; nil, solange nicht geladen.
     public private(set) var settings: MemberSettings?
+    /// Vergangene Buchungen der zuletzt im Kalender gezeigten Woche.
+    public private(set) var history: [Booking] = []
+    private var historyRange: (start: Date, end: Date)?
 
     public let member: Member
     public let api: any CarpoolAPI
@@ -70,6 +73,14 @@ public final class FamilyStore {
         if settings == nil {
             settings = try? await api.settings(memberID: member.id)
         }
+        await loadHistory()
+    }
+
+    /// Kalender zeigt [start, end): vergangene Fahrten dieses Zeitraums laden (nur wenn er in der
+    /// Vergangenheit beginnt). Beim Neuladen wird der Verlauf mit aktualisiert.
+    public func showHistory(from start: Date, to end: Date, now: Date = Date()) async {
+        historyRange = start < now ? (start, end) : nil
+        await loadHistory()
     }
 
     public func take(_ car: Car, now: Date = Date()) async {
@@ -137,6 +148,27 @@ public final class FamilyStore {
         }
     }
 
+    /// Eigene Reservierung oder laufende Fahrt verlängern. Ist das Auto in der Zeit belegt, nennt der
+    /// Hinweis (`actionError`) wer es hat; liefert dann false.
+    @discardableResult
+    public func extend(_ booking: Booking, to end: Date, now: Date = Date()) async -> Bool {
+        do {
+            let result = try await api.extendBooking(booking.id, to: end)
+            if !result.ok, let snapshot, let car = snapshot.car(booking.carId) {
+                let text = ReservationTexts.conflict(result.conflicts, car: car.title, me: member.id,
+                                                     requestedStart: booking.endsAt ?? now, now: now,
+                                                     text: TimeText(family: snapshot.family))
+                actionError = CarpoolError(code: "conflict", detail: text)
+            }
+            await refresh()
+            return result.ok
+        } catch {
+            actionError = CarpoolError.from(error)
+            await refresh()
+            return false
+        }
+    }
+
     // MARK: Mitglieder, Familie, Autos, Schäden, Einstellungen
 
     /// Führt eine Schreibaktion aus, lädt neu und meldet Erfolg; Fehler landen in `actionError`.
@@ -186,6 +218,15 @@ public final class FamilyStore {
     }
 
     // MARK: Intern
+
+    private func loadHistory() async {
+        guard let range = historyRange else {
+            history = []
+            return
+        }
+        // Verlauf ist Zusatz: bei Fehlern bleibt der alte Stand stehen.
+        if let loaded = try? await api.history(from: range.start, to: range.end) { history = loaded }
+    }
 
     private func fail(_ error: any Error, restoring before: FamilySnapshot) {
         snapshot = before

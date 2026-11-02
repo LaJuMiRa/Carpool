@@ -40,6 +40,8 @@ public final class ReservationModel {
 
     public let snapshot: FamilySnapshot
     public let text: TimeText
+    /// Bearbeitete Reservierung (Kontextmenü „Bearbeiten"); nil = neue Reservierung.
+    public let editing: Booking?
     private let api: any CarpoolAPI
     private let clock: @Sendable () -> Date
     private var checkTask: Task<Void, Never>?
@@ -54,16 +56,31 @@ public final class ReservationModel {
         self.api = api
         self.clock = clock
         self.text = TimeText(family: snapshot.family)
+        self.editing = nil
         let now = clock()
         let car = carID.flatMap(snapshot.car) ?? snapshot.cars.first { $0.primaryMemberId == snapshot.me.id }
             ?? snapshot.cars.first
         self.draft = .initial(day: day, carID: car?.id, now: now, calendar: text.calendar)
     }
 
+    /// Eigene Reservierung bearbeiten: Auto und Zeitraum vorausgefüllt, ohne Wiederholen.
+    public init(snapshot: FamilySnapshot, api: any CarpoolAPI, editing booking: Booking,
+                clock: @escaping @Sendable () -> Date = { Date() }) {
+        self.snapshot = snapshot
+        self.api = api
+        self.clock = clock
+        self.text = TimeText(family: snapshot.family)
+        self.editing = booking
+        self.draft = ReservationDraft(preset: .custom, startsAt: booking.startsAt,
+                                      endsAt: booking.endsAt ?? booking.startsAt, carID: booking.carId)
+    }
+
+    public var isEditing: Bool { editing != nil }
+
     // MARK: Eingaben
 
     public var presets: [ReservationDraft.Preset] { ReservationDraft.presets(now: clock(), calendar: text.calendar) }
-    public var canRepeat: Bool { draft.canRepeat(calendar: text.calendar) }
+    public var canRepeat: Bool { !isEditing && draft.canRepeat(calendar: text.calendar) }
     public var selectedCar: Car? { draft.carID.flatMap(snapshot.car) }
 
     public func select(_ preset: ReservationDraft.Preset) {
@@ -106,12 +123,16 @@ public final class ReservationModel {
     /// Text des Primär-Buttons: „Reservieren" oder „Octavia ist belegt".
     public var submitTitle: String {
         if conflictBanner != nil, let car = selectedCar { return "\(car.title) ist belegt" }
-        return "Reservieren"
+        return isEditing ? "Speichern" : "Reservieren"
     }
 
     public var canSubmit: Bool {
-        conflictBanner == nil && checkError == nil && !isSubmitting
-            && draft.request(calendar: text.calendar) != nil
+        conflictBanner == nil && checkError == nil && !isSubmitting && request != nil
+    }
+
+    /// Anfrage für den aktuellen Entwurf; beim Bearbeiten mit der Buchung.
+    private var request: ReservationRequest? {
+        draft.request(calendar: text.calendar)?.editing(editing?.id)
     }
 
     // MARK: Aktionen
@@ -149,7 +170,7 @@ public final class ReservationModel {
     }
 
     private func reserve(displace: Bool, acceptNoReplacement: Bool) async {
-        guard let request = draft.request(calendar: text.calendar), !isSubmitting else { return }
+        guard let request, !isSubmitting else { return }
         isSubmitting = true
         defer { isSubmitting = false }
         do {
@@ -176,7 +197,7 @@ public final class ReservationModel {
         case .conflict, nil:
             // Inzwischen belegt: Hinweis im Formular zeigen.
             step = .editing
-            if draft.request(calendar: text.calendar) == request { check = result }
+            if self.request == request { check = result }
         }
     }
 
@@ -184,7 +205,7 @@ public final class ReservationModel {
         checkTask?.cancel()
         check = nil
         checkError = nil
-        guard let request = draft.request(calendar: text.calendar) else {
+        guard let request else {
             freeCarIDs = nil
             return
         }
@@ -194,7 +215,7 @@ public final class ReservationModel {
                 guard !Task.isCancelled else { return }
             }
             async let checked = api.checkReservation(request)
-            async let free = api.freeCars(from: request.startsAt, to: request.endsAt)
+            async let free = api.freeCars(from: request.startsAt, to: request.endsAt, ignoring: request.bookingID)
             do {
                 let (result, cars) = try await (checked, free)
                 guard !Task.isCancelled else { return }

@@ -2,8 +2,9 @@ import CarpoolKit
 import CarpoolUI
 import SwiftUI
 
-/// Kalender (F10/F11): Woche mit Punkten je Auto, Buchungen des gewählten Tags, Kontextmenü.
-/// Woche blättern und Tag antippen ohne Animation.
+/// Kalender (F10/F11): Woche mit Punkten je Auto, Buchungen des gewählten Tags, Kontextmenü
+/// (Bearbeiten, Verlängern, An jemand übergeben, Löschen, Übernehmen). Vergangene Tage zeigen
+/// auch abgeschlossene Fahrten. Woche blättern und Tag antippen ohne Animation.
 struct CalendarScreen: View {
     let store: FamilyStore
 
@@ -11,6 +12,8 @@ struct CalendarScreen: View {
     @State private var selectedDay: Date?
     @State private var reservationDay: ReservationDay?
     @State private var displaceTarget: DisplaceTarget?
+    @State private var editTarget: Booking?
+    @State private var transferTarget: TransferTarget?
     /// Laufende Fahrten, deren Icon schon eingefahren ist (nur einmal beim Öffnen).
     @State private var drivenIn: Set<UUID> = []
     @State private var reserved = false
@@ -19,6 +22,12 @@ struct CalendarScreen: View {
     private struct ReservationDay: Identifiable {
         let date: Date
         var id: Date { date }
+    }
+
+    private struct TransferTarget: Identifiable {
+        let booking: Booking
+        let member: Member
+        var id: String { "\(booking.id)-\(member.id)" }
     }
 
     /// Buchung, die übernommen werden soll; `noReplacement` = zweite Bestätigung.
@@ -42,6 +51,25 @@ struct CalendarScreen: View {
             }
         }
         .sheet(item: $displaceTarget) { target in displaceSheet(target) }
+        .sheet(item: $editTarget) { booking in
+            if let snapshot = store.snapshot {
+                ReservationSheet(snapshot: snapshot, api: store.api, editing: booking) {
+                    reserved.toggle()
+                    Task { await store.refresh() }
+                }
+            }
+        }
+        .alert(transferTarget.map { "Reservierung an \($0.member.firstName) übergeben?" } ?? "",
+               isPresented: transferBinding, presenting: transferTarget) { target in
+            Button("An \(target.member.firstName) übergeben") {
+                Task {
+                    await store.perform { try await $0.transferBooking(target.booking.id, to: target.member.id) }
+                }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { target in
+            Text("\(target.member.firstName) bekommt eine Nachricht. Danach gehört die Reservierung nicht mehr dir.")
+        }
         .alert(store.actionError?.message ?? "", isPresented: errorBinding) {
             Button("OK", role: .cancel) { store.dismissError() }
         }
@@ -52,7 +80,8 @@ struct CalendarScreen: View {
     private func content(now: Date) -> some View {
         if let snapshot = store.snapshot {
             let text = TimeText(family: snapshot.family)
-            let state = CalendarState(snapshot: snapshot, selectedDay: selectedDay ?? now, now: now, timeText: text)
+            let state = CalendarState(snapshot: snapshot, history: store.history, selectedDay: selectedDay ?? now,
+                                      now: now, timeText: text)
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.l) {
                     header(state, now: now)
@@ -67,6 +96,11 @@ struct CalendarScreen: View {
                 .padding(.bottom, Spacing.xl)
             }
             .refreshable { await store.refresh() }
+            .task(id: state.week.first?.date) {
+                guard let start = state.week.first?.date,
+                      let end = text.weekCalendar.date(byAdding: .day, value: 7, to: start) else { return }
+                await store.showHistory(from: start, to: end)
+            }
         } else if let error = store.loadError {
             MessageScreen(text: error.message, actionTitle: "Erneut versuchen") {
                 Task { await store.refresh() }
@@ -88,7 +122,8 @@ struct CalendarScreen: View {
                 .font(.subheadline.weight(.semibold))
                 .accessibilityIdentifier("calendar.today")
             Button { reservationDay = ReservationDay(date: state.selectedDay) } label: {
-                Image(systemName: "plus").font(.title3.weight(.semibold))
+                // Eigene Farbe für das Zeichen: in Dunkel ist `ink` hell, Weiß darauf wäre unsichtbar.
+                Image(systemName: "plus").font(.title3.weight(.semibold)).foregroundStyle(Color.onInk)
             }
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.circle)
@@ -132,6 +167,7 @@ struct CalendarScreen: View {
                          color: CarColor(slot: entry.car.colorSlot),
                          marker: entry.isDriving ? .driving : (entry.isRepeating ? .repeating : .none),
                          driveAnimation: driveAnimation(for: entry))
+                .opacity(entry.isPast ? 0.55 : 1)
                 .accessibilityLabel(entry.accessibilityText)
                 .contextMenu { menu(for: entry) }
                 .onAppear { if entry.isDriving { drivenIn.insert(entry.id) } }
@@ -151,6 +187,25 @@ struct CalendarScreen: View {
     @ViewBuilder
     private func menu(for entry: CalendarState.Entry) -> some View {
         if entry.canCancel {
+            Button("Bearbeiten", systemImage: "pencil") { editTarget = entry.booking }
+        }
+        if entry.canExtend, let snapshot = store.snapshot {
+            Menu("Verlängern", systemImage: "clock") {
+                ForEach(BookingExtension.options(for: entry.booking, now: .now,
+                                                 text: TimeText(family: snapshot.family))) { option in
+                    Button(option.title) { Task { await store.extend(entry.booking, to: option.endsAt) } }
+                }
+            }
+        }
+        if entry.canCancel, let snapshot = store.snapshot {
+            Menu("An jemand übergeben", systemImage: "arrow.right") {
+                ForEach(BookingExtension.transferTargets(in: snapshot)) { member in
+                    Button(member.firstName) { transferTarget = TransferTarget(booking: entry.booking, member: member) }
+                }
+            }
+        }
+        if entry.canCancel {
+            Divider()
             if entry.isRepeating {
                 Button("Nur diesen Termin löschen", systemImage: "trash", role: .destructive) {
                     Task { await store.cancel(entry.booking, wholeSeries: false) }
@@ -195,6 +250,10 @@ struct CalendarScreen: View {
                 displaceTarget = DisplaceTarget(entry: target.entry, noReplacement: true)
             }
         }
+    }
+
+    private var transferBinding: Binding<Bool> {
+        Binding(get: { transferTarget != nil }, set: { if !$0 { transferTarget = nil } })
     }
 
     private var errorBinding: Binding<Bool> {

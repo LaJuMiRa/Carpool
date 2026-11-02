@@ -55,6 +55,7 @@ struct PreviewAPI: CarpoolAPI {
     func signIn(email: String, password: String) async throws {}
     func signUp(email: String, password: String) async throws -> SignUpResult { .signedIn }
     func signOut() async throws {}
+    func deleteAccount() async throws {}
     func currentUserID() async -> UUID? { Self.lisa.userId }
     func membership(userID: UUID) async throws -> Member? { nil }
     func createFamily(name: String, firstName: String) async throws {}
@@ -83,9 +84,26 @@ struct PreviewAPI: CarpoolAPI {
         return displace ? .success : result
     }
 
-    func freeCars(from start: Date, to end: Date) async throws -> [Car] {
-        [Self.radieschen, Self.octavia, Self.flitzer].filter { conflicts(car: $0.id, from: start, to: end).isEmpty }
+    func freeCars(from start: Date, to end: Date, ignoring bookingID: UUID?) async throws -> [Car] {
+        [Self.radieschen, Self.octavia, Self.flitzer].filter {
+            conflicts(car: $0.id, from: start, to: end).allSatisfy { $0.bookingId == bookingID }
+        }
     }
+
+    func extendBooking(_ bookingID: UUID, to end: Date) async throws -> ReservationResult { .success }
+    func transferBooking(_ bookingID: UUID, to memberID: UUID) async throws {}
+
+    /// Gestern: Jonas ist mit Octavia gefahren.
+    func history(from start: Date, to end: Date) async throws -> [Booking] {
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Self.start) ?? Self.start
+        let begin = Calendar.current.date(bySettingHour: 9, minute: 12, second: 0, of: yesterday) ?? yesterday
+        let trip = Booking(id: Self.pastTripID, familyId: Self.familyID, carId: Self.octavia.id, memberId: Self.jonas.id,
+                           startsAt: begin, endsAt: begin.addingTimeInterval(2.5 * 3600), kind: .trip,
+                           status: .completed)
+        return trip.startsAt < end && (trip.endsAt ?? trip.startsAt) > start ? [trip] : []
+    }
+
+    static let pastTripID = UUID()
 
     func displace(bookingID: UUID, acceptNoReplacement: Bool) async throws -> DisplaceResult {
         acceptNoReplacement ? .displaced(replacementFound: false) : .noReplacement
@@ -94,13 +112,14 @@ struct PreviewAPI: CarpoolAPI {
     func cancelBooking(_ bookingID: UUID, wholeSeries: Bool) async throws -> Int { 1 }
     func updateName(memberID: UUID, firstName: String, short: String) async throws {}
     func setRole(_ role: Member.Role, memberID: UUID) async throws {}
+    func removeMember(_ memberID: UUID) async throws {}
     func renameFamily(_ familyID: UUID, name: String) async throws {}
     func regenerateInviteCode() async throws -> String { "NEU-7QX" }
     func addCar(_ input: CarInput, familyID: UUID) async throws {}
     func updateCar(_ carID: UUID, input: CarInput) async throws {}
     func archiveCar(_ carID: UUID) async throws {}
     func reportDamage(_ report: DamageReport, familyID: UUID) async throws {}
-    func resolveDamage(_ damageID: UUID) async throws {}
+    func resolveDamage(_ damage: Damage) async throws {}
     func damagePhoto(path: String) async throws -> Data { Data() }
     func settings(memberID: UUID) async throws -> MemberSettings { MemberSettings(memberId: memberID) }
     func updateSettings(_ settings: MemberSettings) async throws {}
@@ -116,7 +135,9 @@ struct PreviewAPI: CarpoolAPI {
 
     private func conflicts(car: UUID, from start: Date, to end: Date) -> [ReservationConflict] {
         Self.bookings.filter { booking in
-            let bookingEnd = booking.endsAt ?? max(booking.plannedEndsAt ?? Date(), Date())
+            // Wie im Backend: laufende Fahrt bis zum geplanten Ende, sonst bis eine Stunde ab jetzt.
+            let bookingEnd = booking.endsAt
+                ?? booking.plannedEndsAt.flatMap { $0 > Date() ? $0 : nil } ?? Date().addingTimeInterval(3600)
             return booking.carId == car && booking.startsAt < end && bookingEnd > start
         }.map { booking in
             let member = [Self.mama, Self.lisa, Self.jonas, Self.felix].first { $0.id == booking.memberId }

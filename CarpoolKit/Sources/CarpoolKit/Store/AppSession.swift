@@ -52,6 +52,12 @@ public final class AppSession {
         try await perform { try await api.signOut() }
     }
 
+    /// Konto löschen; danach abgemeldet. Fehler (Fahrt läuft, letzter Admin) kommen unverändert an.
+    public func deleteAccount() async throws(CarpoolError) {
+        try await perform { try await api.deleteAccount() }
+        await handle(userID: nil)
+    }
+
     public func createFamily(name: String, firstName: String) async throws(CarpoolError) {
         try await perform {
             try await api.createFamily(name: name.trimmingCharacters(in: .whitespaces),

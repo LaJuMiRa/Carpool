@@ -6,12 +6,15 @@ import Storage
 /// Fehler mit festem Code (siehe CLAUDE.md, „Fehlercodes") und deutschem Nutzertext.
 public struct CarpoolError: Error, Equatable, Sendable {
     public let code: String
+    /// Eigener Text statt des Standardtexts (z. B. wer das Auto beim Verlängern blockiert).
+    public let detail: String?
 
-    public init(code: String) {
+    public init(code: String, detail: String? = nil) {
         self.code = code
+        self.detail = detail
     }
 
-    public var message: String { Self.messages[code] ?? Self.messages["unknown"]! }
+    public var message: String { detail ?? Self.messages[code] ?? Self.messages["unknown"]! }
 
     /// Nutzertexte: Du-Form, kurz, ohne Ausrufezeichen.
     static let messages: [String: String] = [
@@ -27,6 +30,11 @@ public struct CarpoolError: Error, Equatable, Sendable {
         "not_a_member": "Du bist noch in keiner Familie.",
         "already_member": "Du bist schon in einer Familie.",
         "invalid_invite_code": "Diesen Einladungscode gibt es nicht.",
+        "too_many_attempts": "Zu viele falsche Codes. Versuch es in 15 Minuten noch einmal.",
+        "cannot_remove_self": "Du kannst dich nicht selbst entfernen.",
+        "member_driving": "Das geht erst, wenn das Auto zurückgegeben ist.",
+        "transfer_admin_first": "Mach zuerst jemand anderen zum Admin, dann kannst du dein Konto löschen.",
+        "not_editable": "Diese Buchung lässt sich nicht mehr ändern.",
         "name_taken": "Diesen Namen gibt es in der Familie schon.",
         "admin_required": "Das dürfen nur Admins.",
         "invalid_name": "Der Name braucht mindestens 2 Zeichen, das Kürzel genau 2.",

@@ -131,7 +131,7 @@ struct CarFormSheet: View {
         field("Hauptnutzer (optional)") {
             Picker("Hauptnutzer", selection: $form.primaryMemberId) {
                 Text("Niemand").tag(UUID?.none)
-                ForEach(snapshot.members) { member in
+                ForEach(snapshot.activeMembers) { member in
                     Text(member.firstName).tag(UUID?.some(member.id))
                 }
             }

@@ -25,7 +25,8 @@ enum Appearance: String, CaseIterable {
     }
 }
 
-/// Einstellungen (F16): Profil, Familie (Admin), Autos, Benachrichtigungen, Darstellung, Abmelden.
+/// Einstellungen (F16): Profil, Familie (Admin), Autos, Benachrichtigungen, Darstellung, Abmelden,
+/// Konto löschen.
 struct SettingsScreen: View {
     let session: AppSession
     let store: FamilyStore
@@ -34,6 +35,8 @@ struct SettingsScreen: View {
     @State private var carSheet: CarSheet?
     @State private var confirmsNewCode = false
     @State private var familyName = ""
+    @State private var confirmsDeleteAccount = false
+    @State private var deleteError: CarpoolError?
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
     @Environment(PushRegistration.self) private var push
 
@@ -63,17 +66,7 @@ struct SettingsScreen: View {
                         displaySection(settings)
                     }
                     quickAccessSection
-                    Button("Abmelden", role: .destructive, action: signOut)
-                        .font(.body)
-                        .foregroundStyle(Color.danger)
-                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                        .padding(.horizontal, Spacing.m)
-                        .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.card,
-                                                                        style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                            .strokeBorder(Color.hairline, lineWidth: ControlSize.hairline))
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("settings.signOut")
+                    accountSection
                 }
                 .padding(.horizontal, Spacing.page)
                 .padding(.top, Spacing.xs)
@@ -90,6 +83,10 @@ struct SettingsScreen: View {
                 case .edit(let car): CarFormSheet(store: store, snapshot: snapshot, car: car)
                 }
             }
+        }
+        .alert(deleteError?.message ?? "", isPresented: Binding(
+            get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) {}
         }
         .confirmationDialog("Neuen Einladungscode erstellen?", isPresented: $confirmsNewCode,
                             titleVisibility: .visible) {
@@ -266,6 +263,63 @@ struct SettingsScreen: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var accountSection: some View {
+        VStack(spacing: 0) {
+            accountButton("Abmelden", action: signOut)
+                .accessibilityIdentifier("settings.signOut")
+            Hairline()
+            accountButton("Konto löschen") { confirmsDeleteAccount = true }
+                .accessibilityIdentifier("settings.deleteAccount")
+        }
+        .padding(.horizontal, Spacing.m)
+        .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+            .strokeBorder(Color.hairline, lineWidth: ControlSize.hairline))
+        .alert("Konto löschen?", isPresented: $confirmsDeleteAccount) {
+            Button("Konto löschen", role: .destructive, action: deleteAccount)
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text(deleteAccountMessage)
+        }
+    }
+
+    /// Ganze Zeile tippbar: Rahmen und Trefferfläche gehören ins Label, nicht um den Button.
+    private func accountButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(role: .destructive, action: action) {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(Color.danger)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Ist man das einzige Mitglied mit Konto, verschwindet die ganze Familie.
+    private var deleteAccountMessage: String {
+        guard let snapshot = store.snapshot else { return "" }
+        let othersWithAccount = snapshot.activeMembers.contains { $0.id != snapshot.me.id && $0.userId != nil }
+        if othersWithAccount {
+            return "Deine Anmeldung wird gelöscht. Deine vergangenen Fahrten bleiben für die Familie sichtbar. "
+                + "Das lässt sich nicht rückgängig machen."
+        }
+        return "Du bist das einzige Mitglied mit Konto. „\(snapshot.family.name)“ wird mit allen Autos und "
+            + "Buchungen gelöscht. Das lässt sich nicht rückgängig machen."
+    }
+
+    /// Wie Abmelden: Push und Widgets aufräumen, solange die Anmeldung noch gilt.
+    private func deleteAccount() {
+        Task {
+            do {
+                await push.stop()
+                await QuickAccessSync.clear()
+                try await session.deleteAccount()
+            } catch {
+                deleteError = CarpoolError.from(error)
+            }
+        }
     }
 
     /// Erst Push-Token abmelden und Widgets leeren, solange die Anmeldung noch gilt.

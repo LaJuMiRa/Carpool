@@ -33,21 +33,28 @@ public struct Member: Codable, Sendable, Hashable, Identifiable {
     public let firstName: String
     public let short: String
     public let role: Role
+    /// Von einem Admin entfernt; bleibt für vergangene Buchungen erhalten.
+    public let removedAt: Date?
 
-    public init(id: UUID, familyId: UUID, userId: UUID?, firstName: String, short: String, role: Role) {
+    public init(id: UUID, familyId: UUID, userId: UUID?, firstName: String, short: String, role: Role,
+                removedAt: Date? = nil) {
         self.id = id
         self.familyId = familyId
         self.userId = userId
         self.firstName = firstName
         self.short = short
         self.role = role
+        self.removedAt = removedAt
     }
+
+    public var isRemoved: Bool { removedAt != nil }
 
     enum CodingKeys: String, CodingKey {
         case id, short, role
         case familyId = "family_id"
         case userId = "user_id"
         case firstName = "first_name"
+        case removedAt = "removed_at"
     }
 }
 

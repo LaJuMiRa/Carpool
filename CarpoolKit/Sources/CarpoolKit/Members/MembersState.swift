@@ -19,6 +19,8 @@ public struct MembersState: Sendable, Equatable {
         public let isAdmin: Bool
         /// Noch nicht mit einem Konto beigetreten.
         public let hasJoined: Bool
+        /// Admins dürfen andere aus der Familie entfernen.
+        public let canRemove: Bool
 
         public var id: UUID { member.id }
     }
@@ -34,7 +36,7 @@ public struct MembersState: Sendable, Equatable {
         inviteCode = snapshot.family.inviteCode
         inviteMessage = "Komm in unsere Familie „\(snapshot.family.name)“ bei Carpool. "
             + "Melde dich in der App an und gib diesen Code ein: \(snapshot.family.inviteCode)"
-        rows = snapshot.members.map { member in
+        rows = snapshot.activeMembers.map { member in
             Self.row(for: member, snapshot: snapshot, now: now, text: timeText)
         }
     }
@@ -42,7 +44,8 @@ public struct MembersState: Sendable, Equatable {
     static func row(for member: Member, snapshot: FamilySnapshot, now: Date, text: TimeText) -> Row {
         let base = { (detail: String?, tone: Row.Tone) in
             Row(member: member, isMe: member.id == snapshot.me.id, detail: detail, tone: tone,
-                isAdmin: member.role == .admin, hasJoined: member.userId != nil)
+                isAdmin: member.role == .admin, hasJoined: member.userId != nil,
+                canRemove: snapshot.isAdmin && member.id != snapshot.me.id)
         }
         if let trip = snapshot.bookings.first(where: { $0.isRunningTrip && $0.memberId == member.id }),
            let car = snapshot.car(trip.carId) {

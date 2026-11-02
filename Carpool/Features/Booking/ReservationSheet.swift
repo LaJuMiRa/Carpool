@@ -4,6 +4,7 @@ import SwiftUI
 
 /// Reservieren (F12): Zeitraum, Wiederholung, Auto. Ist das Auto belegt, steht direkt im Formular,
 /// wer es hat, mit allen freien Autos zum Tauschen und (als Hauptnutzer) „Übernehmen".
+/// Im Bearbeiten-Modus (F11 „Bearbeiten") ohne Schnellwahl und Wiederholen.
 struct ReservationSheet: View {
     let onDone: () -> Void
 
@@ -17,6 +18,19 @@ struct ReservationSheet: View {
          onDone: @escaping () -> Void) {
         self.onDone = onDone
         _model = State(initialValue: ReservationModel(snapshot: snapshot, api: api, day: day, carID: carID))
+    }
+
+    /// Eigene Reservierung bearbeiten.
+    init(snapshot: FamilySnapshot, api: any CarpoolAPI, editing booking: Booking, onDone: @escaping () -> Void) {
+        self.onDone = onDone
+        _model = State(initialValue: ReservationModel(snapshot: snapshot, api: api, editing: booking))
+        _editingTime = State(initialValue: true)
+    }
+
+    /// Eine schon laufende Reservierung behält ihren Beginn.
+    private var startIsFixed: Bool {
+        guard let booking = model.editing else { return false }
+        return booking.startsAt <= .now
     }
 
     var body: some View {
@@ -57,7 +71,7 @@ struct ReservationSheet: View {
 
     private var header: some View {
         HStack {
-            Text("Reservieren")
+            Text(model.isEditing ? "Reservierung ändern" : "Reservieren")
                 .font(.title.bold())
                 .kerning(-0.4)
                 .foregroundStyle(Color.ink)
@@ -74,7 +88,31 @@ struct ReservationSheet: View {
     private var whenSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text("Wann").sectionLabelStyle()
-            ScrollView(.horizontal) {
+            if !model.isEditing { presetChips }
+
+            VStack(spacing: 0) {
+                timeRow
+                if editingTime {
+                    timeEditor
+                }
+                if !model.isEditing {
+                    Hairline()
+                    repeatRow
+                }
+            }
+            .padding(.horizontal, Spacing.m)
+            .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(Color.hairline, lineWidth: ControlSize.hairline))
+
+            if let error = model.checkError {
+                Text(error.message).font(.callout).foregroundStyle(Color.danger)
+            }
+        }
+    }
+
+    private var presetChips: some View {
+        ScrollView(.horizontal) {
                 HStack(spacing: Spacing.xs) {
                     ForEach(model.presets, id: \.self) { preset in
                         Chip(preset.title, isSelected: model.draft.preset == preset) {
@@ -86,24 +124,6 @@ struct ReservationSheet: View {
                 }
             }
             .scrollIndicators(.hidden)
-
-            VStack(spacing: 0) {
-                timeRow
-                if editingTime {
-                    timeEditor
-                }
-                Hairline()
-                repeatRow
-            }
-            .padding(.horizontal, Spacing.m)
-            .background(Color.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .strokeBorder(Color.hairline, lineWidth: ControlSize.hairline))
-
-            if let error = model.checkError {
-                Text(error.message).font(.callout).foregroundStyle(Color.danger)
-            }
-        }
     }
 
     private var timeRow: some View {
@@ -123,9 +143,14 @@ struct ReservationSheet: View {
     private var timeEditor: some View {
         VStack(spacing: 0) {
             Hairline()
-            DatePicker("Beginn", selection: Binding(get: { model.draft.startsAt }, set: { model.setStart($0) }),
-                       in: Date.now.addingTimeInterval(-5 * 60)...)
-                .frame(minHeight: 48)
+            if startIsFixed {
+                LabeledContent("Beginn", value: model.text.time(model.draft.startsAt))
+                    .frame(minHeight: 48)
+            } else {
+                DatePicker("Beginn", selection: Binding(get: { model.draft.startsAt }, set: { model.setStart($0) }),
+                           in: Date.now.addingTimeInterval(-5 * 60)...)
+                    .frame(minHeight: 48)
+            }
             Hairline()
             DatePicker("Ende", selection: Binding(get: { model.draft.endsAt }, set: { model.setEnd($0) }),
                        in: model.draft.startsAt.addingTimeInterval(5 * 60)...)

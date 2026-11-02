@@ -32,13 +32,23 @@ public struct ReservationRequest: Sendable, Equatable {
     public let repeatDays: Set<Weekday>
     /// Letzter Tag der Serie („yyyy-MM-dd"), nil = offen.
     public let until: String?
+    /// Bearbeitete Buchung (`update_booking`); nil = neue Reservierung.
+    public let bookingID: UUID?
 
-    public init(carID: UUID, startsAt: Date, endsAt: Date, repeatDays: Set<Weekday> = [], until: String? = nil) {
+    public init(carID: UUID, startsAt: Date, endsAt: Date, repeatDays: Set<Weekday> = [], until: String? = nil,
+                bookingID: UUID? = nil) {
         self.carID = carID
         self.startsAt = startsAt
         self.endsAt = endsAt
-        self.repeatDays = repeatDays
-        self.until = repeatDays.isEmpty ? nil : until
+        self.repeatDays = bookingID == nil ? repeatDays : []
+        self.until = self.repeatDays.isEmpty ? nil : until
+        self.bookingID = bookingID
+    }
+
+    /// Dieselbe Anfrage als Änderung einer bestehenden Buchung (ohne Wiederholung).
+    public func editing(_ bookingID: UUID?) -> ReservationRequest {
+        ReservationRequest(carID: carID, startsAt: startsAt, endsAt: endsAt, repeatDays: repeatDays, until: until,
+                           bookingID: bookingID)
     }
 
     /// „FREQ=WEEKLY;BYDAY=MO,TU" oder nil.

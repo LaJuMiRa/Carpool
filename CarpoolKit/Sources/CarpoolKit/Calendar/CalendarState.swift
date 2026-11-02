@@ -30,8 +30,12 @@ public struct CalendarState: Sendable, Equatable {
         public let personName: String
         public let isDriving: Bool
         public let isRepeating: Bool
-        /// Eigene Reservierung, die noch nicht vorbei ist.
+        /// Eigene Reservierung, die noch nicht vorbei ist: bearbeiten, übergeben, löschen.
         public let canCancel: Bool
+        /// Eigene Reservierung oder eigene laufende Fahrt: verlängern.
+        public let canExtend: Bool
+        /// Schon vorbei (abgeschlossene Fahrt, vergangene Reservierung): gedämpft, ohne Aktionen.
+        public let isPast: Bool
         /// Hauptnutzer darf diese zukünftige Reservierung übernehmen.
         public let canDisplace: Bool
 
@@ -52,10 +56,16 @@ public struct CalendarState: Sendable, Equatable {
     public let entries: [Entry]
     public let selectedDay: Date
 
-    public init(snapshot: FamilySnapshot, selectedDay: Date, now: Date, timeText: TimeText) {
+    /// - Parameter history: vergangene Buchungen (abgeschlossene Fahrten, vorbei gegangene Reservierungen)
+    ///   für zurückliegende Tage; Doppelte mit dem aktuellen Stand werden ignoriert.
+    public init(snapshot: FamilySnapshot, history: [Booking] = [], selectedDay: Date, now: Date,
+                timeText: TimeText) {
         let calendar = timeText.weekCalendar
         let day = calendar.startOfDay(for: selectedDay)
-        let builder = CalendarBuilder(snapshot: snapshot, now: now, text: timeText, calendar: calendar)
+        let current = Set(snapshot.bookings.map(\.id))
+        let past = history.filter { !current.contains($0.id) && [.active, .completed].contains($0.status) }
+        let builder = CalendarBuilder(snapshot: snapshot, all: snapshot.bookings + past, now: now, text: timeText,
+                                      calendar: calendar)
         self.selectedDay = day
         self.title = timeText.month(day, relativeTo: now)
         self.dayTitle = timeText.dayTitle(day, relativeTo: now)
@@ -72,6 +82,8 @@ public struct CalendarState: Sendable, Equatable {
 
 private struct CalendarBuilder {
     let snapshot: FamilySnapshot
+    /// Aktuelle und vergangene Buchungen.
+    let all: [Booking]
     let now: Date
     let text: TimeText
     let calendar: Calendar
@@ -84,8 +96,9 @@ private struct CalendarBuilder {
 
     func bookings(on day: Date) -> [Booking] {
         guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { return [] }
-        return snapshot.bookings.filter { booking in
-            guard booking.status == .active, snapshot.car(booking.carId) != nil else { return false }
+        return all.filter { booking in
+            guard booking.status == .active || booking.status == .completed,
+                  snapshot.car(booking.carId) != nil else { return false }
             let range = interval(of: booking)
             // Gerade erst genommen: Beginn = Ende = jetzt, trotzdem an diesem Tag zeigen.
             return range.start < next && max(range.end, range.start.addingTimeInterval(1)) > day
@@ -116,6 +129,8 @@ private struct CalendarBuilder {
         let member = snapshot.member(booking.memberId)
         let isMine = booking.memberId == snapshot.me.id
         let startsToday = calendar.isDate(booking.startsAt, inSameDayAs: day)
+        let isPast = booking.status == .completed || (booking.endsAt.map { $0 <= now } ?? false)
+        let ownOpenReservation = isMine && booking.kind == .reservation && !isPast
         return CalendarState.Entry(
             booking: booking, car: car,
             startLabel: startsToday ? text.time(booking.startsAt) : "",
@@ -124,8 +139,10 @@ private struct CalendarBuilder {
             personName: isMine ? "Du" : (member?.firstName ?? "Jemand"),
             isDriving: booking.isRunningTrip,
             isRepeating: booking.seriesId != nil,
-            canCancel: isMine && booking.kind == .reservation && (booking.endsAt ?? .distantFuture) > now,
-            canDisplace: !isMine && booking.kind == .reservation && booking.startsAt > now
+            canCancel: ownOpenReservation,
+            canExtend: ownOpenReservation || (isMine && booking.isRunningTrip),
+            isPast: isPast,
+            canDisplace: !isMine && !isPast && booking.kind == .reservation && booking.startsAt > now
                 && car.primaryMemberId == snapshot.me.id)
     }
 

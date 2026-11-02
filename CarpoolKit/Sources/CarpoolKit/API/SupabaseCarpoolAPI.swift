@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Supabase
 
 /// `CarpoolAPI` über supabase-swift.
@@ -54,6 +55,12 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
         try await call { try await client.auth.signOut() }
     }
 
+    public func deleteAccount() async throws {
+        try await call { try await client.rpc("delete_account").execute() }
+        // Der Nutzer existiert serverseitig nicht mehr: nur noch die lokale Sitzung verwerfen.
+        try? await client.auth.signOut(scope: .local)
+    }
+
     // MARK: Familie
 
     public func membership(userID: UUID) async throws -> Member? {
@@ -71,10 +78,16 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
     }
 
     public func joinFamily(inviteCode: String, firstName: String) async throws {
-        try await call {
-            try await client.rpc("join_family", params: ["p_invite_code": inviteCode, "p_first_name": firstName])
-                .execute()
+        struct Response: Decodable {
+            let ok: Bool
+            let reason: String?
         }
+        let response: Response = try await call {
+            try await client.rpc("join_family", params: ["p_invite_code": inviteCode, "p_first_name": firstName])
+                .execute().value
+        }
+        // Falscher Code kommt als Antwort (damit das Backend Fehlversuche zählen kann).
+        if !response.ok { throw CarpoolError(code: response.reason ?? "unknown") }
     }
 
     public func snapshot(for member: Member) async throws -> FamilySnapshot {
@@ -174,6 +187,7 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
         let p_until: String?
         let p_displace: Bool?
         let p_accept_no_replacement: Bool?
+        let p_booking_id: UUID?
 
         init(_ request: ReservationRequest, displace: Bool? = nil, acceptNoReplacement: Bool? = nil) {
             p_car_id = request.carID
@@ -183,6 +197,7 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
             p_until = request.until
             p_displace = displace
             p_accept_no_replacement = acceptNoReplacement
+            p_booking_id = request.bookingID
         }
 
         static func timestamp(_ date: Date) -> String {
@@ -199,16 +214,73 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
     public func reserve(_ request: ReservationRequest, displace: Bool, acceptNoReplacement: Bool) async throws
         -> ReservationResult {
         try await call {
-            try await client.rpc("reserve", params: ReserveParams(request, displace: displace,
-                                                                  acceptNoReplacement: acceptNoReplacement))
+            if let bookingID = request.bookingID {
+                struct Params: Encodable {
+                    let p_booking_id: UUID
+                    let p_car_id: UUID
+                    let p_starts_at: String
+                    let p_ends_at: String
+                    let p_displace: Bool
+                    let p_accept_no_replacement: Bool
+                }
+                let params = Params(p_booking_id: bookingID, p_car_id: request.carID,
+                                    p_starts_at: ReserveParams.timestamp(request.startsAt),
+                                    p_ends_at: ReserveParams.timestamp(request.endsAt),
+                                    p_displace: displace, p_accept_no_replacement: acceptNoReplacement)
+                return try await client.rpc("update_booking", params: params).execute().value
+            }
+            return try await client.rpc("reserve", params: ReserveParams(request, displace: displace,
+                                                                         acceptNoReplacement: acceptNoReplacement))
                 .execute().value
         }
     }
 
-    public func freeCars(from start: Date, to end: Date) async throws -> [Car] {
+    public func freeCars(from start: Date, to end: Date, ignoring bookingID: UUID?) async throws -> [Car] {
+        struct Params: Encodable {
+            let p_starts_at: String
+            let p_ends_at: String
+            let p_booking_id: UUID?
+        }
+        return try await call {
+            try await client.rpc("free_cars", params: Params(p_starts_at: ReserveParams.timestamp(start),
+                                                             p_ends_at: ReserveParams.timestamp(end),
+                                                             p_booking_id: bookingID))
+                .execute().value
+        }
+    }
+
+    public func extendBooking(_ bookingID: UUID, to end: Date) async throws -> ReservationResult {
+        struct Params: Encodable {
+            let p_booking_id: UUID
+            let p_ends_at: String
+        }
+        return try await call {
+            try await client.rpc("extend_booking", params: Params(p_booking_id: bookingID,
+                                                                  p_ends_at: ReserveParams.timestamp(end)))
+                .execute().value
+        }
+    }
+
+    public func transferBooking(_ bookingID: UUID, to memberID: UUID) async throws {
+        struct Params: Encodable {
+            let p_booking_id: UUID
+            let p_member_id: UUID
+        }
         try await call {
-            try await client.rpc("free_cars", params: ["p_starts_at": ReserveParams.timestamp(start),
-                                                       "p_ends_at": ReserveParams.timestamp(end)])
+            try await client.rpc("transfer_booking", params: Params(p_booking_id: bookingID, p_member_id: memberID))
+                .execute()
+        }
+    }
+
+    public func history(from start: Date, to end: Date) async throws -> [Booking] {
+        let now = Date()
+        return try await call {
+            try await client.from("bookings").select()
+                .in("status", values: ["active", "completed"])
+                .lt("starts_at", value: ReserveParams.timestamp(end))
+                .gt("ends_at", value: ReserveParams.timestamp(start))
+                .lte("ends_at", value: ReserveParams.timestamp(now))
+                .order("starts_at")
                 .execute().value
         }
     }
@@ -260,6 +332,10 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
         try await call {
             try await client.from("members").update(["role": role.rawValue]).eq("id", value: memberID).execute()
         }
+    }
+
+    public func removeMember(_ memberID: UUID) async throws {
+        try await call { try await client.rpc("remove_member", params: ["p_member_id": memberID]).execute() }
     }
 
     public func renameFamily(_ familyID: UUID, name: String) async throws {
@@ -325,6 +401,7 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
     // MARK: Schäden
 
     static let damageBucket = "damage-photos"
+    static let logger = Logger(subsystem: "at.rauscher.carpool", category: "api")
 
     public func reportDamage(_ report: DamageReport, familyID: UUID) async throws {
         struct Row: Encodable {
@@ -347,10 +424,21 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
         try await call { try await client.from("damages").insert(row).execute() }
     }
 
-    public func resolveDamage(_ damageID: UUID) async throws {
+    public func resolveDamage(_ damage: Damage) async throws {
+        struct Row: Encodable {
+            let resolved_at: String
+            let photo_path: String?
+        }
         try await call {
-            try await client.from("damages").update(["resolved_at": Date().formatted(.iso8601)])
-                .eq("id", value: damageID).execute()
+            try await client.from("damages").update(Row(resolved_at: Date().formatted(.iso8601), photo_path: nil))
+                .eq("id", value: damage.id).execute()
+        }
+        guard let path = damage.photoPath else { return }
+        // Der Schaden ist erledigt; ein liegengebliebenes Foto ist kein Fehler für die Person.
+        do {
+            _ = try await client.storage.from(Self.damageBucket).remove(paths: [path])
+        } catch {
+            Self.logger.error("Schadenfoto \(path, privacy: .public) nicht gelöscht: \(error.localizedDescription)")
         }
     }
 

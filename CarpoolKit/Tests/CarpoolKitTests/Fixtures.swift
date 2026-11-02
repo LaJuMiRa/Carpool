@@ -67,6 +67,7 @@ final class FakeAPI: CarpoolAPI, Sendable {
         var reserveResults: [ReservationResult] = [.success]
         var freeCars: [Car] = []
         var displaceResults: [DisplaceResult] = [.displaced(replacementFound: true)]
+        var history: [Booking] = []
         var requests: [ReservationRequest] = []
         var settings: MemberSettings?
         var writeError: CarpoolError?
@@ -91,6 +92,7 @@ final class FakeAPI: CarpoolAPI, Sendable {
         return .confirmationRequired
     }
     func signOut() async throws { record("signOut") }
+    func deleteAccount() async throws { try write("deleteAccount") }
     func currentUserID() async -> UUID? { state.withLock { $0.membership?.userId } }
     func membership(userID: UUID) async throws -> Member? { state.withLock { $0.membership } }
     func createFamily(name: String, firstName: String) async throws {
@@ -126,7 +128,18 @@ final class FakeAPI: CarpoolAPI, Sendable {
         record("reserve displace=\(displace) accept=\(acceptNoReplacement)")
         return state.withLock { $0.requests.append(request); return Self.next(&$0.reserveResults) }
     }
-    func freeCars(from start: Date, to end: Date) async throws -> [Car] { state.withLock { $0.freeCars } }
+    func freeCars(from start: Date, to end: Date, ignoring bookingID: UUID?) async throws -> [Car] {
+        state.withLock { $0.freeCars }
+    }
+    func extendBooking(_ bookingID: UUID, to end: Date) async throws -> ReservationResult {
+        record("extend")
+        return state.withLock { Self.next(&$0.reserveResults) }
+    }
+    func transferBooking(_ bookingID: UUID, to memberID: UUID) async throws { try write("transfer") }
+    func history(from start: Date, to end: Date) async throws -> [Booking] {
+        record("history")
+        return state.withLock { $0.history }
+    }
     func displace(bookingID: UUID, acceptNoReplacement: Bool) async throws -> DisplaceResult {
         record("displace accept=\(acceptNoReplacement)")
         return state.withLock { Self.next(&$0.displaceResults) }
@@ -140,6 +153,7 @@ final class FakeAPI: CarpoolAPI, Sendable {
         try write("name \(firstName) \(short)")
     }
     func setRole(_ role: Member.Role, memberID: UUID) async throws { try write("role \(role.rawValue)") }
+    func removeMember(_ memberID: UUID) async throws { try write("removeMember") }
     func renameFamily(_ familyID: UUID, name: String) async throws { try write("family \(name)") }
     func regenerateInviteCode() async throws -> String {
         try write("code")
@@ -151,7 +165,7 @@ final class FakeAPI: CarpoolAPI, Sendable {
     func reportDamage(_ report: DamageReport, familyID: UUID) async throws {
         try write("damage \(report.description) photo=\(report.photo != nil)")
     }
-    func resolveDamage(_ damageID: UUID) async throws { try write("resolve") }
+    func resolveDamage(_ damage: Damage) async throws { try write("resolve") }
     func damagePhoto(path: String) async throws -> Data { Data() }
     func settings(memberID: UUID) async throws -> MemberSettings {
         state.withLock { $0.settings } ?? MemberSettings(memberId: memberID)

@@ -28,6 +28,9 @@ public struct FamilySnapshot: Codable, Sendable, Hashable {
         damages.filter { $0.carId == carID }
     }
 
+    /// Mitglieder ohne die entfernten (Listen, Auswahl von Hauptnutzer und Übergeben).
+    public var activeMembers: [Member] { members.filter { !$0.isRemoved } }
+
     public func member(_ id: UUID) -> Member? { members.first { $0.id == id } }
     public func car(_ id: UUID) -> Car? { cars.first { $0.id == id } }
 

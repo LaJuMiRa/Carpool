@@ -30,6 +30,9 @@ public protocol CarpoolAPI: Sendable {
     func signIn(email: String, password: String) async throws
     func signUp(email: String, password: String) async throws -> SignUpResult
     func signOut() async throws
+    /// Eigenes Konto löschen (`delete_account`) und lokal abmelden. Ist man das einzige beigetretene
+    /// Mitglied, wird die Familie mitgelöscht.
+    func deleteAccount() async throws
 
     func membership(userID: UUID) async throws -> Member?
     func createFamily(name: String, firstName: String) async throws
@@ -45,10 +48,17 @@ public protocol CarpoolAPI: Sendable {
 
     /// Prüft eine Reservierung, ohne zu buchen (Hinweis im Formular).
     func checkReservation(_ request: ReservationRequest) async throws -> ReservationResult
+    /// Reservieren, bzw. mit `request.bookingID` die eigene Reservierung ändern (`update_booking`).
     func reserve(_ request: ReservationRequest, displace: Bool, acceptNoReplacement: Bool) async throws
         -> ReservationResult
-    /// Autos, die im ganzen Zeitraum frei sind.
-    func freeCars(from start: Date, to end: Date) async throws -> [Car]
+    /// Autos, die im ganzen Zeitraum frei sind; `ignoring` = bearbeitete Buchung zählt nicht.
+    func freeCars(from start: Date, to end: Date, ignoring bookingID: UUID?) async throws -> [Car]
+    /// Eigene Reservierung oder laufende Fahrt verlängern; bei Konflikt `ok == false` mit `conflicts`.
+    func extendBooking(_ bookingID: UUID, to end: Date) async throws -> ReservationResult
+    /// Eigene Reservierung an ein anderes Mitglied übergeben.
+    func transferBooking(_ bookingID: UUID, to memberID: UUID) async throws
+    /// Abgeschlossene Fahrten und vergangene Reservierungen, die [start, end) berühren (Kalender).
+    func history(from start: Date, to end: Date) async throws -> [Booking]
     func displace(bookingID: UUID, acceptNoReplacement: Bool) async throws -> DisplaceResult
     /// Eigene Reservierung stornieren; liefert die Zahl stornierter Termine.
     @discardableResult
@@ -59,6 +69,8 @@ public protocol CarpoolAPI: Sendable {
     func updateName(memberID: UUID, firstName: String, short: String) async throws
     /// Rolle ändern (nur Admins; der letzte Admin bleibt Admin).
     func setRole(_ role: Member.Role, memberID: UUID) async throws
+    /// Mitglied aus der Familie entfernen (Admin; nicht sich selbst, nicht während einer Fahrt).
+    func removeMember(_ memberID: UUID) async throws
     func renameFamily(_ familyID: UUID, name: String) async throws
     /// Neuer Einladungscode (Admin).
     func regenerateInviteCode() async throws -> String
@@ -70,7 +82,8 @@ public protocol CarpoolAPI: Sendable {
 
     // Schäden
     func reportDamage(_ report: DamageReport, familyID: UUID) async throws
-    func resolveDamage(_ damageID: UUID) async throws
+    /// Schaden erledigen; ein Foto wird dabei gelöscht.
+    func resolveDamage(_ damage: Damage) async throws
     func damagePhoto(path: String) async throws -> Data
 
     // Einstellungen
@@ -81,4 +94,10 @@ public protocol CarpoolAPI: Sendable {
     /// Gerätetoken (Hex) für Push-Nachrichten an dieses Gerät anmelden.
     func registerDevice(token: String) async throws
     func unregisterDevice(token: String) async throws
+}
+
+public extension CarpoolAPI {
+    func freeCars(from start: Date, to end: Date) async throws -> [Car] {
+        try await freeCars(from: start, to: end, ignoring: nil)
+    }
 }

@@ -37,6 +37,14 @@ test("Buchung übernommen, mit und ohne Ersatzauto", () => {
   );
 });
 
+test("Reservierung übergeben", () => {
+  const payload = { starts_at: "2026-10-31T09:00:00Z", ends_at: "2026-10-31T15:00:00Z" };
+  assert.deepEqual(buildMessage(notification("booking_transferred", payload, { actor_name: "Lisa" }), now), {
+    title: "Lisa hat dir Radieschen gegeben",
+    body: "Die Reservierung morgen, 10:00–16:00 gehört jetzt dir.",
+  });
+});
+
 test("Reservierung beginnt bald und Rückgabe überfällig", () => {
   assert.deepEqual(buildMessage(notification("reservation_soon", { starts_at: "2026-10-30T13:00:00Z" }), now), {
     title: "Radieschen ab 14:00",

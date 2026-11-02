@@ -36,7 +36,8 @@ public enum DeepLink: Sendable, Hashable {
     public init(notificationKind kind: String?, carID: UUID?) {
         switch kind {
         case "return_overdue": self = .returnCar
-        case "booking_displaced", "reservation_soon", "series_occurrence_skipped": self = .calendar
+        case "booking_displaced", "booking_transferred", "reservation_soon", "series_occurrence_skipped":
+            self = .calendar
         case "service_pickerl": self = carID.map(DeepLink.car) ?? .overview
         default: self = .overview
         }

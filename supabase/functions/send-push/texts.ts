@@ -6,6 +6,7 @@ export type ClaimedNotification = {
   kind:
     | "car_free"
     | "booking_displaced"
+    | "booking_transferred"
     | "reservation_soon"
     | "return_overdue"
     | "service_pickerl"
@@ -92,6 +93,15 @@ export function buildMessage(n: ClaimedNotification, now: Date): Message | null 
         ? ` ${n.replacement_title} ist in der Zeit frei.`
         : " Kein anderes Auto ist frei.";
       return { title: `${who} hat ${car} übernommen`, body: lost + replacement };
+    }
+    case "booking_transferred": {
+      const start = date(p.starts_at);
+      if (!start) return null;
+      const who = n.actor_name ?? "Jemand";
+      return {
+        title: `${who} hat dir ${car} gegeben`,
+        body: `Die Reservierung ${range(start, date(p.ends_at), now, tz)} gehört jetzt dir.`,
+      };
     }
     case "reservation_soon": {
       const start = date(p.starts_at);

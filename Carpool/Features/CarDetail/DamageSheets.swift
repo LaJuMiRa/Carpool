@@ -161,7 +161,7 @@ struct DamageDetailSheet: View {
                             titleVisibility: .visible) {
             Button("Erledigt") {
                 Task {
-                    if await store.perform({ [id = row.damage.id] in try await $0.resolveDamage(id) }) { dismiss() }
+                    if await store.perform({ [damage = row.damage] in try await $0.resolveDamage(damage) }) { dismiss() }
                 }
             }
         }

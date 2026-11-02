@@ -9,6 +9,8 @@ struct MembersScreen: View {
     let store: FamilyStore
 
     @State private var path = NavigationPath()
+    /// Mitglied, das nach Bestätigung entfernt wird.
+    @State private var removeTarget: Member?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -30,6 +32,19 @@ struct MembersScreen: View {
         .alert(store.actionError?.message ?? "", isPresented: errorBinding) {
             Button("OK", role: .cancel) { store.dismissError() }
         }
+        .alert(removeTarget.map { "\($0.firstName) entfernen?" } ?? "", isPresented: removeBinding,
+               presenting: removeTarget) { member in
+            Button("Entfernen", role: .destructive) {
+                Task { await store.perform { try await $0.removeMember(member.id) } }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { member in
+            Text("\(member.firstName) sieht die Familie danach nicht mehr. Künftige Reservierungen werden gelöscht.")
+        }
+    }
+
+    private var removeBinding: Binding<Bool> {
+        Binding(get: { removeTarget != nil }, set: { if !$0 { removeTarget = nil } })
     }
 
     @ViewBuilder
@@ -75,7 +90,7 @@ struct MembersScreen: View {
             ForEach(Array(state.rows.enumerated()), id: \.element.id) { index, row in
                 if index > 0 { Hairline() }
                 MemberRow(row: row)
-                    .contextMenu { if isAdmin && !row.isMe { roleMenu(row) } }
+                    .contextMenu { if isAdmin && !row.isMe { adminMenu(row) } }
             }
         }
         .padding(.horizontal, Spacing.m)
@@ -85,7 +100,7 @@ struct MembersScreen: View {
     }
 
     @ViewBuilder
-    private func roleMenu(_ row: MembersState.Row) -> some View {
+    private func adminMenu(_ row: MembersState.Row) -> some View {
         if row.isAdmin {
             Button("Admin-Rechte entfernen", systemImage: "person.badge.minus") {
                 Task { await store.perform { try await $0.setRole(.member, memberID: row.member.id) } }
@@ -93,6 +108,12 @@ struct MembersScreen: View {
         } else {
             Button("Zum Admin machen", systemImage: "person.badge.key") {
                 Task { await store.perform { try await $0.setRole(.admin, memberID: row.member.id) } }
+            }
+        }
+        if row.canRemove {
+            Divider()
+            Button("Aus der Familie entfernen", systemImage: "person.crop.circle.badge.xmark", role: .destructive) {
+                removeTarget = row.member
             }
         }
     }

@@ -32,11 +32,11 @@ insert into _tap (line) select no_plan();
 
 -- Fixtures ------------------------------------------------------------------
 insert into auth.users (id, email, aud, role) values
-  ('00000000-0000-4000-8000-000000000001', 'papa@test.local',  'authenticated', 'authenticated'),
-  ('00000000-0000-4000-8000-000000000002', 'mama@test.local',  'authenticated', 'authenticated'),
-  ('00000000-0000-4000-8000-000000000003', 'lisa@test.local',  'authenticated', 'authenticated'),
-  ('00000000-0000-4000-8000-000000000004', 'jonas@test.local', 'authenticated', 'authenticated'),
-  ('00000000-0000-4000-8000-000000000009', 'fremd@test.local', 'authenticated', 'authenticated');
+  ('00000000-0000-4000-8000-000000000001', 'papa@rules.local', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000002', 'mama@rules.local', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000003', 'lisa@rules.local', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000004', 'jonas@rules.local', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000009', 'fremd@rules.local', 'authenticated', 'authenticated');
 insert into _ids values
   ('u_papa',  '00000000-0000-4000-8000-000000000001'),
   ('u_mama',  '00000000-0000-4000-8000-000000000002'),
@@ -62,8 +62,8 @@ insert into _tap (line) select throws_ok(
 insert into _code select invite_code from public.families where id = pg_temp.id('family');
 
 select pg_temp.login(pg_temp.id('u_lisa'));
-insert into _tap (line) select throws_ok(
-  $$ select public.join_family('XXX-XXX', 'Lisa') $$, 'P0001', 'invalid_invite_code',
+insert into _tap (line) select is(
+  public.join_family('XXX-XXX', 'Lisa') ->> 'reason', 'invalid_invite_code',
   'join_family: falscher Code wird abgelehnt');
 insert into _tap (line) select lives_ok(
   format($$ select public.join_family(%L, 'Lisa') $$,
