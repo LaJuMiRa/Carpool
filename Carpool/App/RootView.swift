@@ -36,6 +36,10 @@ struct MainTabView: View {
             // Widgets und Live-Aktivität folgen jeder Änderung (auch per Realtime).
             if let snapshot { Task { await QuickAccessSync.update(snapshot) } }
         }
+        .onChange(of: store.settings?.launchAnimation) { _, mode in
+            // Der Splash läuft vor dem Laden der Einstellungen; deshalb auf dem Gerät merken.
+            if let mode { LaunchSplashStore().mode = mode }
+        }
         .onDisappear { store.stop() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await store.refresh() } }

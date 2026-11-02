@@ -26,12 +26,16 @@ public struct StatusLabel: View {
             Circle()
                 .fill(status.color)
                 .frame(width: 7, height: 7)
-            Text(text ?? status.label)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(status.color)
-                .contentTransition(.opacity)
+            ZStack(alignment: .leading) {
+                Text(text ?? status.label)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(status.color)
+                    .id(text ?? status.label)
+                    .transition(.statusFade)
+            }
         }
         .animation(Motion.crossfade, value: status)
+        .animation(Motion.crossfade, value: text)
         .accessibilityElement(children: .combine)
     }
 }
@@ -49,5 +53,20 @@ public struct CarDot: View {
             .fill(color.base)
             .frame(width: 7, height: 7)
             .accessibilityHidden(true)
+    }
+}
+
+public extension AnyTransition {
+    /// Statuswechsel: Überblenden mit 2 pt Unschärfe (keine Bewegung, gilt auch bei „Bewegung reduzieren").
+    static var statusFade: AnyTransition {
+        .modifier(active: BlurFade(isActive: true), identity: BlurFade(isActive: false))
+    }
+}
+
+private struct BlurFade: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        content.blur(radius: isActive ? 2 : 0).opacity(isActive ? 0 : 1)
     }
 }

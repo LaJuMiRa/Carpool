@@ -7,6 +7,7 @@ public struct DesignCatalogView: View {
     @State private var chip = "Morgen"
     @State private var selectedTile = 1
     @State private var selectedRow = 0
+    @State private var splashRun = 0
 
     private let radieschen = CarNaming(make: "VW", model: "Golf", nickname: "Radieschen")
     private let octavia = CarNaming(make: "Škoda", model: "Octavia", nickname: nil)
@@ -33,6 +34,7 @@ public struct DesignCatalogView: View {
                     booking
                     fuelSection
                     cardSection
+                    splashSection
                 }
                 .padding(.horizontal, Spacing.page)
                 .padding(.vertical, Spacing.l)
@@ -210,6 +212,30 @@ public struct DesignCatalogView: View {
             .cardStyle(padding: Spacing.m)
             SectionHeader("Schäden") {
                 Button("Melden") {}.font(.headline).foregroundStyle(Color.ink)
+            }
+        }
+    }
+}
+
+extension DesignCatalogView {
+    /// Splash (F01) verkleinert; „Abspielen" startet den Ablauf neu.
+    var splashSection: some View {
+        CatalogSection("Splash") {
+            SplashView(hold: 3600) {}
+                .id(splashRun)
+                .allowsHitTesting(false)
+                .frame(height: 420)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(Color.hairline))
+            Button("Abspielen") { splashRun += 1 }.buttonStyle(.carpoolSecondary)
+            SectionHeader("App-Icon")
+            HStack(spacing: Spacing.m) {
+                AppIconArtwork().scaleEffect(96 / AppIconArtwork.side).frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.hairline))
+                AppIconArtwork().environment(\.colorScheme, .dark)
+                    .scaleEffect(96 / AppIconArtwork.side).frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
             }
         }
     }

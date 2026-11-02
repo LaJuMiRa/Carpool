@@ -45,6 +45,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
+        ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Für Fotos von Schäden am Auto.
         UIBackgroundModes: [remote-notification]
         CFBundleURLTypes:
@@ -76,6 +77,7 @@ targets:
       path: CarpoolWidgets/Info.plist
       properties:
         CFBundleDisplayName: Carpool
+        ITSAppUsesNonExemptEncryption: false
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         SupabaseURL: $(SUPABASE_URL)

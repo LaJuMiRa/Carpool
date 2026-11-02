@@ -94,6 +94,8 @@ struct AuthScreen: View {
     }
 }
 
+#if DEBUG
 #Preview {
     AuthScreen(session: AppSession(api: PreviewAPI()))
 }
+#endif

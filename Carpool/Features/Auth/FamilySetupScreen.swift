@@ -95,6 +95,8 @@ struct FamilySetupScreen: View {
     }
 }
 
+#if DEBUG
 #Preview {
     FamilySetupScreen(session: AppSession(api: PreviewAPI()))
 }
+#endif

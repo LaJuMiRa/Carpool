@@ -215,6 +215,16 @@ Berechnet in `CarpoolKit/Sources/CarpoolKit/Members/MembersState.swift`, `…/Ca
 **Kurzbefehl/Siri** „Auto zurückgeben" (`ReturnCarIntent`): läuft ohne App zu öffnen; fragt „Wie voll ist der Tank von Radieschen?" (¼ ½ ¾ voll), antwortet „Radieschen zurückgegeben." bzw. „Du fährst gerade kein Auto.", „Melde dich zuerst in der App an.". Siri-Sätze: „Auto zurückgeben mit Carpool", „Carpool Auto zurückgeben", „Mit Carpool zurückgeben".
 - Einstellungen → Schnellzugriff: „Widgets" (Anleitung + Vorschau mit echten Daten inkl. Live-Aktivität), „Kurzbefehle und Siri" (Siri-Satz, Link in die Kurzbefehle-App).
 
+## Splash, Icon, TestFlight (Stand Phase 8)
+
+- **Splash (F01)** in `CarpoolKit/Sources/CarpoolUI/Splash/` (`KeyBoardScene`, `SplashView`, Ablauf `SplashTimeline` als `KeyframeTimeline`): mittlerer Schlüssel fällt in 0,5 s auf den Haken (leichte Haptik), pendelt aus (10° → −7° → 4° → −2° → 0, zuletzt bounce 0.3), stößt erst den linken, dann den rechten Schlüssel an; ab 1,35 s steigt „Carpool“ 8 pt auf. Endstand 0,45 s, dann 200 ms ausblenden; gesamt gut 2 s. Tippen überspringt. „Bewegung reduzieren“ und VoiceOver: alles steht, nur der Titel blendet 150 ms ein.
+- Der Splash liegt über der App, die darunter schon lädt. Ob er erscheint, entscheidet `LaunchSplashStore` auf dem Gerät („Erster Start“: nur einmal je Gerät; „Immer“: jeder Start), weil die Einstellungen beim Start noch nicht geladen sind; die App spiegelt `settings.launch_animation` dorthin, sobald sie geladen oder geändert wird.
+- Debug: in `-previewFamily`, `-designCatalog` und mit `DEV_EMAIL` kein Splash; `-splash` erzwingt ihn, `-splashHold` lässt den Endstand 8 s stehen (`SplashUITests`).
+- **App-Icon:** Schlüsselbrett aus derselben Szene (`AppIconArtwork`), Hell und Dunkel, ohne Alphakanal. Neu erzeugen: `cd CarpoolKit && TEST_RUNNER_EXPORT_APP_ICON=$PWD/../Carpool/Resources/Assets.xcassets/AppIcon.appiconset xcodebuild test -scheme CarpoolKit-Package -destination '…' -only-testing:CarpoolUITests`.
+- Statuswechsel überblenden mit 2 pt Unschärfe (`AnyTransition.statusFade`).
+- **Für TestFlight vorbereitet:** Privacy-Manifeste (`PrivacyInfo.xcprivacy` in App und Widgets: UserDefaults CA92.1; erhobene Daten E-Mail, Name, Fotos, Inhalte – nur für die App-Funktion, kein Tracking), `ITSAppUsesNonExemptEncryption = NO`, Release-Build kompiliert (Vorschauen mit `PreviewAPI` nur im Debug).
+- **TestFlight hochladen** (sobald das Developer-Konto da ist): `DEVELOPMENT_TEAM` in `project.yml` setzen, `xcodegen generate`; in App Store Connect App mit Bundle-ID `at.rauscher.carpool` anlegen; App ID mit App Group und Push, Widget-ID `.widgets` mit App Group; `CURRENT_PROJECT_VERSION` bei jedem Upload erhöhen; Xcode → Product → Archive → Distribute → TestFlight. Beim Export setzt Xcode `aps-environment` auf `production`; in Supabase dazu `APNS_SANDBOX=false`. Familie als interne Tester (bis 100, ohne Review) oder externe Gruppe (kurzes Review).
+
 ## Entwicklung und Tests
 - Testkonten (nur Entwicklung, Passwort beim Projektinhaber): `papa@test.local` (Papa, Admin), `lisa@test.local` (Lisa), `neu@test.local` (ohne Familie). Vor dem echten Einsatz löschen.
 - Automatische Anmeldung im Debug-Build: Umgebungsvariablen `DEV_EMAIL`/`DEV_PASSWORD`, im Simulator per `SIMCTL_CHILD_DEV_EMAIL=… SIMCTL_CHILD_DEV_PASSWORD=… xcrun simctl launch …`.
@@ -307,15 +317,18 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - Übernehmen-Text sagt „die Reservierung" statt „seine Reservierung" (Mockup F14), damit er für alle Namen passt.
 - Auto-Icon im Kalender: „Einmal" = beim ersten Erscheinen je Fahrt, „Dauerhaft" = alle 6 s einfahren/ausblenden, „Aus" = steht.
 - Auto-Detail (F05) kam in Phase 6 dazu, weil die Schäden dort leben.
-- Erscheinungsbild wird nur auf dem Gerät gespeichert (`@AppStorage`), nicht in `settings`. Startanimation wird gespeichert, wirkt aber erst mit dem Splash (Phase 8).
+- Erscheinungsbild wird nur auf dem Gerät gespeichert (`@AppStorage`), nicht in `settings`. Startanimation steht in `settings` und wird für den Splash zusätzlich auf dem Gerät gespiegelt.
 - „Zurückgeben" in Widget und Live-Aktivität öffnet das Rückgabe-Sheet in der App (Deep Link), statt direkt zurückzugeben: der Tankstand ist Pflicht und lässt sich im Widget nicht abfragen. Direkt ohne App geht es über den Kurzbefehl.
 - Live-Aktivität wird lokal von der App gesteuert (kein Push-Update). Nach Änderungen durch andere aktualisiert sie sich, sobald die App läuft; der Timer läuft vom System weiter.
 - Push-Versand: Nachrichten werden beim Abholen als verschickt markiert; schlägt APNs vorübergehend fehl, gehen sie verloren (für eine Familie vertretbar, kein Retry). „Auto wieder frei" kommt damit nach 15 s bis gut 1 min.
 - Siri-Hinweis als eigene Zeile statt `SiriTipView` (zeigt im Simulator nur einen Platzhalter).
+- Splash-Einstellung wird zusätzlich auf dem Gerät gespiegelt (`LaunchSplashStore`), weil der Splash vor Anmeldung und Laden der Einstellungen läuft. Auf einem neuen Gerät gilt daher beim allerersten Start immer „Erster Start“.
+- App-Icon wird aus SwiftUI gerendert statt gezeichnet: Splash und Icon bleiben dieselbe Form. Das Brett läuft im Icon bis an den Rand, damit die Schlüssel klein lesbar bleiben.
+- Splash-Titel mit fester Größe (44 pt), nicht Dynamic Type: er ist Teil der Marke, kein Lesetext.
 - DerivedData nicht im Projektordner ablegen (iCloud-Ordner hängt Metadaten an → Codesign-Fehler „detritus not allowed").
 
 ## Offene Punkte
-- **Push scharf schalten:** Apple-Developer-Konto, APNs-Schlüssel, Secrets und Vault-Einträge (siehe „Push"); Migration `…_push.sql` ist eingespielt (Cron-Jobs laufen, sammeln aber nur in der Outbox); Function `send-push` ist noch nicht deployt. `aps-environment` steht auf `development`; für TestFlight auf `production` und `APNS_SANDBOX=false`.
+- **Push scharf schalten:** Apple-Developer-Konto, APNs-Schlüssel, Secrets und Vault-Einträge (siehe „Push"); Migration `…_push.sql` ist eingespielt (Cron-Jobs laufen, sammeln aber nur in der Outbox); Function `send-push` ist noch nicht deployt. `aps-environment` steht auf `development` (Xcode setzt beim TestFlight-Export `production`); dann `APNS_SANDBOX=false`.
 - Push für Android (FCM) in `send-push` ergänzen.
 - Kontextmenü F11 zeigt im Mockup auch „Bearbeiten", „Verlängern", „An jemand übergeben" – dafür fehlen RPCs (`update_booking`, `extend_booking`, `transfer_booking`); bisher nur Löschen und Übernehmen.
 - Mitglieder entfernen geht noch nicht (keine RPC/Policy dafür).
@@ -323,6 +336,7 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - Kalender zeigt nur aktive Buchungen; abgeschlossene Fahrten vergangener Tage fehlen (bräuchte eigene Abfrage).
 - **Anbieter für Fahrzeugbilder** (freigestellt, nach Marke/Modell/Farbe): Kosten, Lizenz und Abdeckung prüfen; bis dahin neutrale Silhouette je Karosserieform.
 - **App-Store-Name:** „Carpool" ist vermutlich vergeben; Anzeigename auf dem iPhone bleibt „Carpool", Store-Eintrag ggf. „Carpool – Familienautos". Für TestFlight egal.
-- App-Icon: Schlüsselbrett-Motiv aus dem Splash.
+- **Feinschliff am echten iPhone** (Phase 8) steht noch aus: Splash-Timing und Haptik, Nehmen/Zurückgeben, Tank-Regler, Zoom-Übergang und Dynamic Type XXL am Gerät prüfen. Geht erst mit Developer-Konto (oder kostenlosem Team für eigenes Gerät).
+- Tinted-Variante des App-Icons (iOS erzeugt sie bisher automatisch aus der hellen).
 - Rate-Limit für `join_family` (Code-Raten) vor TestFlight prüfen.
 - Beispiel-Familie Berger liegt in der Cloud-Datenbank; vor dem echten Einsatz löschen (`delete from families where invite_code = 'K7P-2QX'`).

@@ -156,9 +156,11 @@ extension Car {
     var naming: CarNaming { CarNaming(make: make, model: model, nickname: nickname) }
 }
 
+#if DEBUG
 #Preview {
     let store = FamilyStore(member: PreviewAPI.lisa, api: PreviewAPI())
     OverviewScreen(store: store)
         .environment(AppRouter())
         .task { await store.refresh() }
 }
+#endif
