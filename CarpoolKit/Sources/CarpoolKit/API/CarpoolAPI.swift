@@ -25,6 +25,8 @@ public struct TakeResult: Codable, Sendable, Equatable {
 public protocol CarpoolAPI: Sendable {
     /// Liefert die aktuelle Nutzer-ID (nil = abgemeldet), zuerst den gespeicherten Stand.
     func authChanges() -> AsyncStream<UUID?>
+    /// Angemeldete Nutzer-ID, Sitzung bei Bedarf erneuert (für Kurzbefehle ohne laufende App).
+    func currentUserID() async -> UUID?
     func signIn(email: String, password: String) async throws
     func signUp(email: String, password: String) async throws -> SignUpResult
     func signOut() async throws
@@ -74,4 +76,9 @@ public protocol CarpoolAPI: Sendable {
     // Einstellungen
     func settings(memberID: UUID) async throws -> MemberSettings
     func updateSettings(_ settings: MemberSettings) async throws
+
+    // Push
+    /// Gerätetoken (Hex) für Push-Nachrichten an dieses Gerät anmelden.
+    func registerDevice(token: String) async throws
+    func unregisterDevice(token: String) async throws
 }

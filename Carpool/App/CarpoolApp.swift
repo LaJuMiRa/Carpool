@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct CarpoolApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var session = AppSession.live()
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
 
@@ -15,7 +16,7 @@ struct CarpoolApp: App {
                     DesignCatalogView(initialSection: UserDefaults.standard.string(forKey: "designCatalogSection"))
                 } else if ProcessInfo.processInfo.arguments.contains("-previewFamily") {
                     // Beispiel-Familie ohne Netzwerk, angemeldet als Lisa.
-                    MainTabView(session: AppSession(api: PreviewAPI()), member: PreviewAPI.lisa)
+                    MainTabView(session: AppSession(api: PreviewAPI()), member: PreviewAPI.lisa, usesPush: false)
                 } else {
                     content
                 }
@@ -23,6 +24,9 @@ struct CarpoolApp: App {
                 content
                 #endif
             }
+            .environment(appDelegate.router)
+            .environment(appDelegate.push)
+            .onOpenURL { appDelegate.router.open($0) }
             .tint(Color.ink)
             .preferredColorScheme(Appearance(rawValue: appearance)?.colorScheme)
         }

@@ -22,6 +22,8 @@ struct MembersScreen: View {
                 switch route {
                 case .settings: SettingsScreen(session: session, store: store, path: $path)
                 case .profile: ProfileScreen(store: store)
+                case .widgets: WidgetsInfoScreen(store: store)
+                case .shortcuts: ShortcutsInfoScreen()
                 }
             }
         }
@@ -126,7 +128,7 @@ struct MembersScreen: View {
 
 /// Ziele innerhalb des Mitglieder-Tabs.
 enum SettingsRoute: Hashable {
-    case settings, profile
+    case settings, profile, widgets, shortcuts
 }
 
 private struct MemberRow: View {

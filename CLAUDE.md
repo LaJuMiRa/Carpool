@@ -191,11 +191,35 @@ Berechnet in `CarpoolKit/Sources/CarpoolKit/Members/MembersState.swift`, `…/Ca
 - **Auto-Detail (F05):** Tippen auf Auto in der Übersicht (Zoom-Übergang). Status „bei dir · seit 09:12" bzw. wie Übersicht, „Hauptnutzer: Papa" / „du". Buttons: Zurückgeben (eigene Fahrt) oder Nehmen + Reservieren (mit diesem Auto). Schäden mit „Melden"; „Keine offenen Schäden."; Zeile „Kratzer …" + „Lisa, 12. Okt · fahrbereit" / „nicht fahrbereit". Nächste Buchungen (max. 4): „Heute, 18:00–22:00" / „Morgen, …" / „Mo, 2. Nov, …", Person bzw. „Papa, jede Woche". Zustand: Tank, Pickerl „bis März 2027" (≤ 30 Tage gelb, danach „abgelaufen" rot; gilt bis Monatsende), Service „heute" / „morgen" / „in 5 Tagen" / „in 3 Wochen" / „Mai 2027" (≤ 30 Tage gelb, „überfällig" rot), Kennzeichen, Kilometerstand.
 - **Schaden melden:** Foto (Kamera oder Mediathek, verkleinert auf max. 1600 px, JPEG 0,7) nach `damage-photos/<family_id>/<uuid>.jpg`, „Was ist passiert?" (Pflicht, max. 1000 Zeichen), „Fahrbereit" (Standard ja). Offene Schäden: Warn-Icon an der Karte. Schaden antippen → Foto groß, „Erledigt" (mit Bestätigung) setzt `resolved_at`.
 
+## Push, Widgets, Live-Aktivität, Kurzbefehl (Stand Phase 7)
+
+**Push** (Migration `…_push.sql`, Edge Function `supabase/functions/send-push`):
+- Alle Nachrichten laufen über die Outbox `notifications`. Cron jede Minute: `private.queue_reminders()` legt „Reservierung beginnt bald" (≤ 15 min vorher) und „Rückgabe überfällig" (geplantes Ende + 15 min) an; täglich 06:00 UTC `private.queue_car_reminders()` für Pickerl/Service (einmal je Auto und Termin, sobald ≤ 30 Tage; an den Hauptnutzer, sonst an alle Admins). Jede Minute ruft `private.dispatch_push()` die Edge Function auf, wenn etwas fällig ist.
+- `send-push` holt mit `claim_push_batch()` (nur `service_role`) bis zu 100 fällige Nachrichten, markiert sie als verschickt, beachtet die Schalter in `settings` und schickt an alle Geräte (iOS über APNs; Android/FCM folgt). Ungültige Token löscht `drop_device_tokens()`.
+- App: fragt nach dem Anmelden nach der Erlaubnis, meldet das Token mit `register_device('ios', …)` an und beim Abmelden ab. Antippen öffnet: Rückgabe überfällig → Rückgabe-Sheet; übernommen, beginnt bald, Serie → Kalender; Pickerl/Service → Auto-Detail; sonst Übersicht. Im Vordergrund als Banner.
+- **Texte** (`texts.ts`, für iOS und Android gleich): „Radieschen ist frei" / „Lisa hat Radieschen zurückgegeben, Tank ¾." · „Papa hat Radieschen übernommen" / „Deine Reservierung morgen, 10:00–16:00 fällt weg. Flitzer ist in der Zeit frei." (sonst „Kein anderes Auto ist frei.") · „Radieschen ab 14:00" / „Deine Reservierung beginnt bald." · „Radieschen zurückgeben" / „Du wolltest Radieschen um 17:30 zurückgeben." · „Pickerl für Radieschen" / „Das Pickerl gilt bis Ende November 2026." („Das Pickerl ist abgelaufen.") · „Service für Radieschen" / „Der Service ist morgen fällig." („Der Service ist überfällig.") · „Radieschen am Mo, 2. Nov belegt" / „Dieser Termin deiner Serie wurde nicht angelegt (am Mo, 2. Nov, 08:00–17:00)." Übersprungene Serientermine hängen am Schalter „Meine Buchung wurde übernommen".
+- Einrichten (einmalig, sobald das Apple-Developer-Konto da ist): APNs-Schlüssel (.p8) anlegen; `supabase secrets set APNS_KEY=… APNS_KEY_ID=… APNS_TEAM_ID=… APNS_TOPIC=at.rauscher.carpool APNS_SANDBOX=true PUSH_DISPATCH_SECRET=…`; im Vault `project_url` und `push_dispatch_secret` (gleicher Wert) anlegen; Function deployen (`npx supabase functions deploy send-push`). Ohne Schlüssel antwortet die Function mit 503 und lässt die Nachrichten liegen. Nachrichten, die beim Abholen mehr als 1 h überfällig sind (z. B. aus der Zeit vor dem Einrichten), werden nur als erledigt markiert, nicht verschickt.
+- Texte testen: `node --test supabase/functions/send-push/texts.test.ts`.
+
+**Widgets** (F09; Logik `CarpoolKit/…/QuickAccess/WidgetState.swift`, Ansichten `CarpoolUI/QuickAccess/`):
+- Die App speichert nach jeder Änderung den Snapshot im App-Group-Ordner (`SharedSnapshotStore`) und lädt die Widgets neu; beim Abmelden wird er gelöscht. Widgets brauchen kein Netzwerk und keine Anmeldung; die Zeitleiste rechnet den Stand für jede Buchungsgrenze der nächsten 12 h neu.
+- „Alle Autos" (mittel: 3 Autos, groß: bis 6): „Carpool", „1 von 3 frei", je Auto Bild, Name, Status („bei dir" für das eigene), darunter „Radieschen zurückgeben".
+- „Mein Auto" (klein): gefahrenes Auto mit „bei dir" und „Zurückgeben"; sonst das Auto, dessen Hauptnutzer ich bin, mit Detailzeile; sonst „Du fährst gerade nicht.".
+- „Nächste Fahrt" (klein): während der Fahrt die nächste Person auf meinem Auto („18:00", „Jonas nimmt Radieschen"), sonst meine nächste Reservierung („Du nimmst Flitzer"); anderer Tag darüber („Morgen" / „Mo, 2. Nov"); leer „Nichts geplant.".
+- Ohne gespeicherten Stand: „Öffne die App, um dich anzumelden.".
+
+**Live-Aktivität** (F08): startet, sobald ich eine laufende Fahrt habe (auch per Realtime oder Kurzbefehl), endet bei der Rückgabe. Sperrbildschirm: Auto, „Du fährst seit 09:12", Fahrzeit (System-Timer), Fortschritt von Beginn bis zur nächsten Reservierung, „09:12" · „Jonas ab 18:00", Button „Zurückgeben". Dynamic Island: Auto-Symbol in Autofarbe + Fahrzeit; aufgeklappt mit Zurückgeben.
+
+**Deep Links** (`carpool://`): `overview`, `return` (Rückgabe-Sheet der eigenen Fahrt), `calendar`, `car/<id>`.
+
+**Kurzbefehl/Siri** „Auto zurückgeben" (`ReturnCarIntent`): läuft ohne App zu öffnen; fragt „Wie voll ist der Tank von Radieschen?" (¼ ½ ¾ voll), antwortet „Radieschen zurückgegeben." bzw. „Du fährst gerade kein Auto.", „Melde dich zuerst in der App an.". Siri-Sätze: „Auto zurückgeben mit Carpool", „Carpool Auto zurückgeben", „Mit Carpool zurückgeben".
+- Einstellungen → Schnellzugriff: „Widgets" (Anleitung + Vorschau mit echten Daten inkl. Live-Aktivität), „Kurzbefehle und Siri" (Siri-Satz, Link in die Kurzbefehle-App).
+
 ## Entwicklung und Tests
 - Testkonten (nur Entwicklung, Passwort beim Projektinhaber): `papa@test.local` (Papa, Admin), `lisa@test.local` (Lisa), `neu@test.local` (ohne Familie). Vor dem echten Einsatz löschen.
 - Automatische Anmeldung im Debug-Build: Umgebungsvariablen `DEV_EMAIL`/`DEV_PASSWORD`, im Simulator per `SIMCTL_CHILD_DEV_EMAIL=… SIMCTL_CHILD_DEV_PASSWORD=… xcrun simctl launch …`.
 - UI-Test Kernablauf gegen das echte Backend (`CarpoolAppUITests`): `TEST_RUNNER_DEV_EMAIL=lisa@test.local TEST_RUNNER_DEV_PASSWORD=… xcodebuild test …`; ohne die Variablen wird er übersprungen.
-- **Beispiel-Familie ohne Netzwerk** (nur Debug): Startargument `-previewFamily` öffnet die App als Lisa mit `PreviewAPI` (Lisa ist Hauptnutzerin von Flitzer; Konflikte grob nachgestellt). Lisa ist dort Admin, Mama Hauptnutzerin von Radieschen (mit Schaden). Darauf laufen `CalendarFlowUITests` (Konflikt → Tauschen → Übernehmen) und `FamilyFlowUITests` (Auto-Detail, Schaden melden, Mitglieder, Einstellungen, Auto hinzufügen) ohne Testkonto.
+- **Beispiel-Familie ohne Netzwerk** (nur Debug): Startargument `-previewFamily` öffnet die App als Lisa mit `PreviewAPI` (Lisa ist Hauptnutzerin von Flitzer; Konflikte grob nachgestellt). Lisa ist dort Admin, Mama Hauptnutzerin von Radieschen (mit Schaden). Darauf laufen `CalendarFlowUITests` (Konflikt → Tauschen → Übernehmen), `FamilyFlowUITests` (Auto-Detail, Schaden melden, Mitglieder, Einstellungen, Auto hinzufügen) und `QuickAccessFlowUITests` (Widget-Vorschau, Kurzbefehl-Seite, Deep Links) ohne Testkonto.
 - Supabase Auth: „Confirm email" für die Testphase ausschalten (Dashboard → Authentication → Sign In / Providers → Email), sonst braucht jede Registrierung einen Bestätigungslink.
 
 ## Design System
@@ -284,10 +308,15 @@ Arbeitsweise: nach jeder Phase bauen und im Simulator prüfen; keine Phase über
 - Auto-Icon im Kalender: „Einmal" = beim ersten Erscheinen je Fahrt, „Dauerhaft" = alle 6 s einfahren/ausblenden, „Aus" = steht.
 - Auto-Detail (F05) kam in Phase 6 dazu, weil die Schäden dort leben.
 - Erscheinungsbild wird nur auf dem Gerät gespeichert (`@AppStorage`), nicht in `settings`. Startanimation wird gespeichert, wirkt aber erst mit dem Splash (Phase 8).
-- Einstellungen ohne „Schnellzugriff" (Widgets, Kurzbefehle) – kommt mit Phase 7.
+- „Zurückgeben" in Widget und Live-Aktivität öffnet das Rückgabe-Sheet in der App (Deep Link), statt direkt zurückzugeben: der Tankstand ist Pflicht und lässt sich im Widget nicht abfragen. Direkt ohne App geht es über den Kurzbefehl.
+- Live-Aktivität wird lokal von der App gesteuert (kein Push-Update). Nach Änderungen durch andere aktualisiert sie sich, sobald die App läuft; der Timer läuft vom System weiter.
+- Push-Versand: Nachrichten werden beim Abholen als verschickt markiert; schlägt APNs vorübergehend fehl, gehen sie verloren (für eine Familie vertretbar, kein Retry). „Auto wieder frei" kommt damit nach 15 s bis gut 1 min.
+- Siri-Hinweis als eigene Zeile statt `SiriTipView` (zeigt im Simulator nur einen Platzhalter).
 - DerivedData nicht im Projektordner ablegen (iCloud-Ordner hängt Metadaten an → Codesign-Fehler „detritus not allowed").
 
 ## Offene Punkte
+- **Push scharf schalten:** Apple-Developer-Konto, APNs-Schlüssel, Secrets und Vault-Einträge (siehe „Push"); Migration `…_push.sql` ist eingespielt (Cron-Jobs laufen, sammeln aber nur in der Outbox); Function `send-push` ist noch nicht deployt. `aps-environment` steht auf `development`; für TestFlight auf `production` und `APNS_SANDBOX=false`.
+- Push für Android (FCM) in `send-push` ergänzen.
 - Kontextmenü F11 zeigt im Mockup auch „Bearbeiten", „Verlängern", „An jemand übergeben" – dafür fehlen RPCs (`update_booking`, `extend_booking`, `transfer_booking`); bisher nur Löschen und Übernehmen.
 - Mitglieder entfernen geht noch nicht (keine RPC/Policy dafür).
 - Schadenfotos werden beim „Erledigt" nicht gelöscht (Storage-Policy erlaubt Löschen nur dem Hochlader).

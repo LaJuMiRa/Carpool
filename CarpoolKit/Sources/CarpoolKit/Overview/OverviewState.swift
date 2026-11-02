@@ -10,6 +10,7 @@ public struct OverviewState: Sendable, Equatable {
         public let car: Car
         public let bookingID: UUID
         public var id: UUID { bookingID }
+        public let startedAt: Date
         /// „09:12"
         public let sinceTime: String
         /// „Du fährst seit 09:12"
@@ -86,7 +87,7 @@ private struct Builder {
                 returnNoteText: "\(member.firstName) bekommt eine Nachricht, dass \(car.title) bereit ist.")
         }
         return OverviewState.MyTrip(
-            car: car, bookingID: trip.id,
+            car: car, bookingID: trip.id, startedAt: trip.startsAt,
             sinceTime: text.time(trip.startsAt),
             fuelOnTakeText: trip.fuelQuartersOnTake.map { "Tank beim Nehmen \(FuelLevel(quarters: $0).label)" },
             next: next)

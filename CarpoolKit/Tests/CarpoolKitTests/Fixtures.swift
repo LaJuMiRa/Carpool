@@ -91,6 +91,7 @@ final class FakeAPI: CarpoolAPI, Sendable {
         return .confirmationRequired
     }
     func signOut() async throws { record("signOut") }
+    func currentUserID() async -> UUID? { state.withLock { $0.membership?.userId } }
     func membership(userID: UUID) async throws -> Member? { state.withLock { $0.membership } }
     func createFamily(name: String, firstName: String) async throws {
         record("createFamily \(name) \(firstName)")
@@ -158,6 +159,9 @@ final class FakeAPI: CarpoolAPI, Sendable {
     func updateSettings(_ settings: MemberSettings) async throws {
         try write("settings \(settings.calendarCarAnimation.rawValue)")
     }
+
+    func registerDevice(token: String) async throws { record("register \(token)") }
+    func unregisterDevice(token: String) async throws { record("unregister \(token)") }
 
     private func write(_ call: String) throws {
         record(call)

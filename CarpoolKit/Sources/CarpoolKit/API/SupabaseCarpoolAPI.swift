@@ -17,6 +17,10 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
 
     // MARK: Anmeldung
 
+    public func currentUserID() async -> UUID? {
+        try? await client.auth.session.user.id
+    }
+
     public func authChanges() -> AsyncStream<UUID?> {
         let auth = client.auth
         return AsyncStream { continuation in
@@ -141,6 +145,18 @@ public final class SupabaseCarpoolAPI: CarpoolAPI {
             try await client.rpc("return_car", params: Params(p_fuel_quarters: fuel.quarters, p_car_id: carID))
                 .execute()
         }
+    }
+
+    // MARK: Push
+
+    public func registerDevice(token: String) async throws {
+        try await call {
+            try await client.rpc("register_device", params: ["p_platform": "ios", "p_token": token]).execute()
+        }
+    }
+
+    public func unregisterDevice(token: String) async throws {
+        try await call { try await client.rpc("unregister_device", params: ["p_token": token]).execute() }
     }
 
     public func undoLastAction() async throws {

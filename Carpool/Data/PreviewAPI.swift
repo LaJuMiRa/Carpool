@@ -55,6 +55,7 @@ struct PreviewAPI: CarpoolAPI {
     func signIn(email: String, password: String) async throws {}
     func signUp(email: String, password: String) async throws -> SignUpResult { .signedIn }
     func signOut() async throws {}
+    func currentUserID() async -> UUID? { Self.lisa.userId }
     func membership(userID: UUID) async throws -> Member? { nil }
     func createFamily(name: String, firstName: String) async throws {}
     func joinFamily(inviteCode: String, firstName: String) async throws {}
@@ -103,6 +104,8 @@ struct PreviewAPI: CarpoolAPI {
     func damagePhoto(path: String) async throws -> Data { Data() }
     func settings(memberID: UUID) async throws -> MemberSettings { MemberSettings(memberId: memberID) }
     func updateSettings(_ settings: MemberSettings) async throws {}
+    func registerDevice(token: String) async throws {}
+    func unregisterDevice(token: String) async throws {}
 
     func snapshot(for member: Member) async throws -> FamilySnapshot {
         FamilySnapshot(family: Family(id: Self.familyID, name: "Familie Berger", inviteCode: "K7P-2QX"), me: member,

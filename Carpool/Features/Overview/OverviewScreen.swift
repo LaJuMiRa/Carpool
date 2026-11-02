@@ -11,6 +11,7 @@ struct OverviewScreen: View {
     @State private var path: [UUID] = []
     @Namespace private var carSpace
     @Namespace private var zoomSpace
+    @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -40,6 +41,20 @@ struct OverviewScreen: View {
         }
         .sensoryFeedback(.success, trigger: store.undoOffer?.id) { _, new in new != nil }
         .onChange(of: scenePhase) { _, phase in appIsActive = phase == .active }
+        .onChange(of: router.wantsReturn, initial: true) { openReturnIfRequested() }
+        .onChange(of: store.snapshot) { openReturnIfRequested() }
+        .onChange(of: router.carToShow, initial: true) { _, carID in
+            guard let carID else { return }
+            path = [carID]
+            router.carToShow = nil
+        }
+    }
+
+    /// Aus Widget, Live-Aktivität oder Push: Rückgabe-Sheet öffnen, sobald die Daten da sind.
+    private func openReturnIfRequested() {
+        guard router.wantsReturn, let snapshot = store.snapshot else { return }
+        router.wantsReturn = false
+        returnTrip = OverviewState(snapshot: snapshot, now: .now, timeText: TimeText(family: snapshot.family)).myTrip
     }
 
     @ViewBuilder
@@ -143,5 +158,7 @@ extension Car {
 
 #Preview {
     let store = FamilyStore(member: PreviewAPI.lisa, api: PreviewAPI())
-    OverviewScreen(store: store).task { await store.refresh() }
+    OverviewScreen(store: store)
+        .environment(AppRouter())
+        .task { await store.refresh() }
 }

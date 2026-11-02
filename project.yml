@@ -36,6 +36,7 @@ targets:
       path: Carpool/Carpool.entitlements
       properties:
         com.apple.security.application-groups: [group.at.rauscher.carpool]
+        aps-environment: development
     info:
       path: Carpool/Info.plist
       properties:
@@ -45,6 +46,10 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
         NSCameraUsageDescription: Für Fotos von Schäden am Auto.
+        UIBackgroundModes: [remote-notification]
+        CFBundleURLTypes:
+          - CFBundleURLName: at.rauscher.carpool
+            CFBundleURLSchemes: [carpool]
         SupabaseURL: $(SUPABASE_URL)
         SupabaseAnonKey: $(SUPABASE_ANON_KEY)
     settings:

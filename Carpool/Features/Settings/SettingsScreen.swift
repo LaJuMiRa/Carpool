@@ -35,6 +35,7 @@ struct SettingsScreen: View {
     @State private var confirmsNewCode = false
     @State private var familyName = ""
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
+    @Environment(PushRegistration.self) private var push
 
     /// Auto anlegen oder bearbeiten.
     enum CarSheet: Identifiable {
@@ -61,7 +62,8 @@ struct SettingsScreen: View {
                         notificationSection(settings)
                         displaySection(settings)
                     }
-                    Button("Abmelden", role: .destructive) { Task { try? await session.signOut() } }
+                    quickAccessSection
+                    Button("Abmelden", role: .destructive, action: signOut)
                         .font(.body)
                         .foregroundStyle(Color.danger)
                         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
@@ -243,6 +245,36 @@ struct SettingsScreen: View {
             changed[keyPath: key] = value
             Task { await store.update(changed) }
         })
+    }
+
+    private var quickAccessSection: some View {
+        SettingsGroup("Schnellzugriff") {
+            navigationRow("Widgets", route: .widgets)
+            Hairline()
+            navigationRow("Kurzbefehle und Siri", route: .shortcuts)
+        }
+    }
+
+    private func navigationRow(_ title: String, route: SettingsRoute) -> some View {
+        Button { path.append(route) } label: {
+            HStack {
+                Text(title).foregroundStyle(Color.ink)
+                Spacer()
+                Chevron()
+            }
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Erst Push-Token abmelden und Widgets leeren, solange die Anmeldung noch gilt.
+    private func signOut() {
+        Task {
+            await push.stop()
+            await QuickAccessSync.clear()
+            try? await session.signOut()
+        }
     }
 
     private func saveFamilyName(_ snapshot: FamilySnapshot) {

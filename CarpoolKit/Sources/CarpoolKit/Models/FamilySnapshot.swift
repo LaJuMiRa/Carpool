@@ -2,7 +2,7 @@ import Foundation
 
 /// Alles, was Übersicht und Kalender für eine Familie brauchen. Unveränderlich;
 /// Änderungen liefern eine neue Kopie.
-public struct FamilySnapshot: Sendable, Hashable {
+public struct FamilySnapshot: Codable, Sendable, Hashable {
     public let family: Family
     public let me: Member
     public let members: [Member]
